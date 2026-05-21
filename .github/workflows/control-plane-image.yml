@@ -38,6 +38,9 @@ jobs:
           owner_repo_lower=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
           echo "name=ghcr.io/${owner_repo_lower}/control-plane" >> "${GITHUB_OUTPUT}"
 
+      - name: Set up QEMU (cross-build arm64 on amd64 runners)
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -48,12 +51,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Kind on Apple Silicon = linux/arm64; GitHub-hosted runners = linux/amd64. Without both,
+      # kubelet fails with: no match for platform in manifest: not found
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: ${{ env.CONTEXT }}
           file: ${{ env.DOCKERFILE }}
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: |
             ${{ steps.image.outputs.name }}:latest
             ${{ steps.image.outputs.name }}:${{ github.sha }}

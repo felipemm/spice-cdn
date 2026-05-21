@@ -21,16 +21,8 @@ This repository implements a **Next.js control plane** that manages **Spice.ai**
 
 ## Control plane image
 
-**GitOps / cluster:** On push to `main` (when `apps/control-plane` changes), [`.github/workflows/control-plane-image.yml`](.github/workflows/control-plane-image.yml) builds the app, pushes **`ghcr.io/<owner>/<repo>/control-plane`** with tags **`latest`** and **`<git-sha>`**, and commits the new **`image.tag`** into [`deploy/helm/control-plane/values.yaml`](deploy/helm/control-plane/values.yaml) so Argo CD rolls out the new image. Use **Actions → Control plane image → Run workflow** to bootstrap the first image after enabling Actions.
+**GitHub Actions + Kind:** On push to `main` (when `apps/control-plane` changes), [`.github/workflows/control-plane-image.yml`](.github/workflows/control-plane-image.yml) builds a **multi-arch** image (`linux/amd64` + `linux/arm64` for Kind on Apple Silicon), pushes **`ghcr.io/<owner>/<repo>/control-plane`**, and commits **`image.tag`** into [`deploy/helm/control-plane/values.yaml`](deploy/helm/control-plane/values.yaml). Argo CD applies that chart and kubelet **pulls from GHCR** (no `kind load`). Use **Actions → Control plane image → Run workflow** to bootstrap or refresh after workflow changes.
 
-**Local Kind (no registry):**
-
-```bash
-make image-build
-make kind-create
-make image-load
-```
-
-Override the Argo Helm values to use `spice-control-plane:latest` if the cluster should use the image loaded into Kind instead of GHCR (see [tutorial](docs/tutorial.md) GHCR section).
+**Optional — local image into Kind** (air-gapped or fast iteration): `make image-build` then `make image-load-local`, and override Helm `image.repository` / `image.tag` on the Argo `Application` (see [tutorial](docs/tutorial.md) Part B).
 
 Full bootstrap and configuration variables are documented in **[`docs/tutorial.md`](docs/tutorial.md)**.

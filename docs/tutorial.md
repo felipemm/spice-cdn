@@ -7,7 +7,7 @@ Prerequisites:
 - Docker, [Kind](https://kind.sigs.k8s.io/docs/user/quick-start/), `kubectl`, and [Helm 3](https://helm.sh/docs/intro/install/).
 - A **GitHub repository** you control (fork or copy this repo), and a **PAT** or fine-grained token with **`contents: write`** on that repo (for the control plane) and read for Argo CD.
 
-Throughout **Part A**, each step ends with **Validate**: commands to run and what you should see. **Parts B–D** add validations for the image, the control-plane Secret, and the running web UI. If a check fails, fix it before continuing (see [Troubleshooting](#troubleshooting) below).
+Throughout **Part A**, each step ends with **Validate**: commands to run and what you should see. **Parts B–D** add validations for the **control-plane image (GHCR)**, the control-plane Secret, and the running web UI. If a check fails, fix it before continuing (see [Troubleshooting](#troubleshooting) below).
 
 ---
 
@@ -270,8 +270,10 @@ Throughout **Part A**, each step ends with **Validate**: commands to run and wha
 
 **Kind uses the same image as production:** [`deploy/helm/control-plane/values.yaml`](../deploy/helm/control-plane/values.yaml) points at **`ghcr.io/<owner>/<repo>/control-plane`** with an immutable **`image.tag`** (Git SHA) after CI runs. Kind nodes pull from **ghcr.io** over the network (no `kind load`).
 
+Publishing is automated by [`.github/workflows/control-plane-image.yml`](../.github/workflows/control-plane-image.yml) (pushes to **`main`** that touch `apps/control-plane/**`, or **workflow_dispatch**): it pushes **`linux/amd64`** and **`linux/arm64`** (manifest list) as **`latest`** and **`:<git-sha>`** to GHCR, then commits the new **`image.tag`** into Git so Argo rolls the Deployment.
+
 1. In GitHub, run **Actions → Control plane image → Run workflow** on `main` at least once (or merge a change under `apps/control-plane/` so the workflow runs). Wait until it finishes and the follow-up commit has updated **`image.tag`** in Git.
-2. Ensure the GHCR package is **pullable** from your machine: **public**, or configure [`imagePullSecrets`](../deploy/helm/control-plane/values.yaml) plus a docker-registry secret in the **`control-plane`** namespace.
+2. Ensure the GHCR package is **pullable from the Kind nodes** (outbound HTTPS to **ghcr.io**): keep the package **public**, or configure [`imagePullSecrets`](../deploy/helm/control-plane/values.yaml) plus a docker-registry secret in the **`control-plane`** namespace.
 
 **Validate:**
 
@@ -371,7 +373,8 @@ Expect: JSON **`{"ok":true,...}`** from `/api/health`, and **`HTTP/1.1`** from `
 | `Resource not found in cluster: ... ClusterRoleBinding` / `ClusterRole` | Argo is comparing live state before a successful sync, or the UI is stale after fixing `AppProject`. Apply the updated [`gitops/apps/app-project.yaml`](../gitops/apps/app-project.yaml) if needed, then **Hard Refresh** and **Sync** the `control-plane` Application. List cluster RBAC and look for the release name plus `-gitops` (for example `control-plane-gitops` when `helm.releaseName` is `control-plane`). |
 | `control-plane.*.nip.io` does not load (connection refused, timeout) | Kind maps **host** `127.0.0.1:80` to the **node** port 80. Bootstrap values must set **`controller.hostPort.enabled: true`** (see [`gitops/bootstrap/values-ingress-nginx.yaml`](../gitops/bootstrap/values-ingress-nginx.yaml)); otherwise the Service uses a high `NodePort` and nothing listens on 80. Re-run the Helm upgrade for ingress-nginx, wait for the controller pod to be Ready, then try `curl -sI -H "Host: control-plane.127.0.0.1.nip.io" http://127.0.0.1/`. On macOS, another process using port 80 can block Kind; check with `sudo lsof -iTCP:80 -sTCP:LISTEN`. |
 | `argocd.*.nip.io` does not load | Same ingress-nginx / Kind port **80** checklist as the row above. Confirm the Argo CD Ingress exists: `kubectl -n argocd get ingress`. Re-apply values with `helm upgrade --install argocd ... -f gitops/bootstrap/values-argocd.yaml` if `server.ingress.enabled` was still false. |
-| `ImagePullBackOff` / **`Failed to pull image`** `ghcr.io/.../control-plane` | Confirm the **Control plane image** workflow has run and the tag in Git matches GHCR. For a **private** package, add a docker-registry pull secret in `control-plane` and set **`imagePullSecrets`** in [`deploy/helm/control-plane/values.yaml`](../deploy/helm/control-plane/values.yaml). For **Kind without GHCR**, override Helm `image.repository` / `image.tag` to your locally loaded image (see Part B, GitHub Actions + GHCR). |
+| `ImagePullBackOff` / **`Failed to pull image`** `ghcr.io/.../control-plane` | Confirm the **Control plane image** workflow has run and the tag in Git matches GHCR. Kind needs outbound access to **ghcr.io**. For a **private** package, add a docker-registry pull secret in `control-plane` and set **`imagePullSecrets`** in [`deploy/helm/control-plane/values.yaml`](../deploy/helm/control-plane/values.yaml). For **air-gapped Kind**, use Part B optional **`make image-load-local`** and override Helm `image.repository` / `image.tag`. |
+| **`no match for platform in manifest`** | The image manifest did not include your node’s CPU (common: **linux/arm64** Kind on Apple Silicon vs an **amd64-only** CI build). Re-run the **Control plane image** workflow after [`.github/workflows/control-plane-image.yml`](../.github/workflows/control-plane-image.yml) publishes **multi-arch** (`linux/amd64` + `linux/arm64`), then sync Argo / restart the Deployment. |
 | `Resource not found in cluster: v1/Service:control-plane` | Namespaced objects were applied to **`default`** while Argo tracks **`control-plane`**. This chart now pins `metadata.namespace` (see `deploy/helm/control-plane/templates/_helpers.tpl`). Commit/push, **Refresh + Sync** the `control-plane` Application; remove stray `Service`/`Deployment` in `default` if they exist (check with `kubectl get svc,deploy -n default`). |
 
 ---

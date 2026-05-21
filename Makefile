@@ -1,11 +1,12 @@
-.PHONY: help kind-create kind-delete image-build image-load
+.PHONY: help kind-create kind-delete image-build image-load-local image-load
 
 help:
 	@echo "Targets:"
-	@echo "  kind-create   - create Kind cluster from hack/kind-config.yaml"
-	@echo "  kind-delete   - delete the cluster named spice-gitops"
-	@echo "  image-build   - docker build control plane image"
-	@echo "  image-load    - kind load docker-image (after image-build)"
+	@echo "  kind-create        - create Kind cluster from hack/kind-config.yaml"
+	@echo "  kind-delete        - delete the cluster named spice-gitops"
+	@echo "  image-build        - docker build local tag spice-control-plane:latest (optional dev)"
+	@echo "  image-load-local   - kind load that local image (only if you override Helm away from GHCR)"
+	@echo "  image-load         - alias for image-load-local"
 
 CLUSTER_NAME ?= spice-gitops
 
@@ -18,5 +19,7 @@ kind-delete:
 image-build:
 	docker build -t spice-control-plane:latest apps/control-plane
 
-image-load: image-build
+image-load-local: image-build
 	kind load docker-image spice-control-plane:latest --name $(CLUSTER_NAME)
+
+image-load: image-load-local
