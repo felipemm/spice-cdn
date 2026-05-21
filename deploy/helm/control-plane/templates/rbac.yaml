@@ -2,7 +2,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ .Release.Name }}-control-plane
+  name: {{ .Release.Name }}-gitops
 rules:
   - apiGroups: ["argoproj.io"]
     resources: ["applications", "applicationsets"]
@@ -20,11 +20,11 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ .Release.Name }}-control-plane
+  name: {{ .Release.Name }}-gitops
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ .Release.Name }}-control-plane
+  name: {{ .Release.Name }}-gitops
 subjects:
   - kind: ServiceAccount
     name: {{ .Values.serviceAccount.name }}
