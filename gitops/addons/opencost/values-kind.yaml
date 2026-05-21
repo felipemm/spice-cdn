@@ -1,0 +1,23 @@
+# OpenCost on Kind + ingress-nginx: expose the UI on port 80 (no port-forward to :9090).
+#
+# Install / upgrade:
+#   helm repo add opencost https://opencost.github.io/opencost-helm-chart && helm repo update
+#   helm upgrade --install opencost opencost/opencost -n opencost --create-namespace \
+#     --version 1.33.1 -f gitops/addons/opencost/values-kind.yaml
+#
+# Open UI: http://opencost.127.0.0.1.nip.io/
+#
+# In-cluster API (control plane OPENCOST_BASE_URL): http://opencost.opencost.svc.cluster.local:9003
+
+opencost:
+  prometheus:
+    internal:
+      enabled: true
+  ui:
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      hosts:
+        - host: opencost.127.0.0.1.nip.io
+          paths:
+            - /

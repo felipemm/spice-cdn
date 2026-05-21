@@ -1,4 +1,4 @@
-# Optional: uncomment and tune when OpenCost should be managed by Argo CD.
+# Optional: Argo CD Application for OpenCost (Kind-friendly ingress for UI).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -12,10 +12,20 @@ spec:
     targetRevision: 1.33.1
     helm:
       releaseName: opencost
+      # Keep in sync with values-kind.yaml (chart 1.33.1: prometheus + ui ingress live under `opencost:`).
       values: |
-        prometheus:
-          internal:
-            enabled: true
+        opencost:
+          prometheus:
+            internal:
+              enabled: true
+          ui:
+            ingress:
+              enabled: true
+              ingressClassName: nginx
+              hosts:
+                - host: opencost.127.0.0.1.nip.io
+                  paths:
+                    - /
   destination:
     server: https://kubernetes.default.svc
     namespace: opencost

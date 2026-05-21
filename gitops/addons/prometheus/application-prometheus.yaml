@@ -1,0 +1,32 @@
+# Optional: Argo CD Application for Prometheus (OpenCost prerequisite on Kind).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: prometheus
+    repoURL: https://prometheus-community.github.io/helm-charts
+    targetRevision: 29.7.0
+    helm:
+      releaseName: prometheus
+      values: |
+        alertmanager:
+          enabled: false
+        pushgateway:
+          enabled: false
+        server:
+          fullnameOverride: prometheus-server
+          persistentVolume:
+            enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prometheus-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -12,7 +12,8 @@ This repository implements a **Next.js control plane** that manages **Spice.ai**
 | [`gitops/bootstrap`](gitops/bootstrap) | Reference Helm values + one-shot manifests (ingress, Vault, ESO, Argo, root `Application`, optional **Kyverno** policy for `owner-layer-slug`). |
 | [`gitops/instances`](gitops/instances) | Per-instance `values.yaml` folders discovered by the `ApplicationSet`. |
 | [`gitops/cost`](gitops/cost) | Budget defaults (mirror of Helm `budgets.default.yaml`; tune per-slug caps). |
-| [`gitops/addons/opencost`](gitops/addons/opencost) | Optional OpenCost install notes + sample Argo Application (commented). |
+| [`gitops/addons/opencost`](gitops/addons/opencost) | Optional OpenCost UI/API + Kind ingress notes. |
+| [`gitops/addons/prometheus`](gitops/addons/prometheus) | **Optional** Prometheus for Kind — required for OpenCost’s default in-cluster queries (`prometheus-server.prometheus-system`). |
 | [`hack/kind-config.yaml`](hack/kind-config.yaml) | Kind cluster with ingress-ready node + host port mappings. |
 | [`docs/tutorial.md`](docs/tutorial.md) | **Step-by-step** Kind tutorial (day‑0 bootstrap vs day‑2 webapp-only operations). |
 
