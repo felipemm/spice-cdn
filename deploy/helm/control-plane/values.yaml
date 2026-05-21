@@ -4,7 +4,7 @@ image:
   # Pushed by .github/workflows/control-plane-image.yml to GHCR; tag is bumped to the Git SHA on each publish so Argo CD rolls the Deployment.
   # Kind uses this ref too: nodes pull from ghcr.io (no kind load) when the package is public or imagePullSecrets is set.
   repository: ghcr.io/felipemm/spice-cdn/control-plane
-  tag: e83b32507962ca5752c4327d486c9e8b1069fac4
+  tag: 547cb3de84c85901fcc5c4105a0c4173895aada0
   pullPolicy: IfNotPresent
 
 # When the GHCR package is private, create a docker-registry secret and reference it here, e.g. [ { name: ghcr-pull } ].
