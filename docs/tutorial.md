@@ -196,7 +196,7 @@ After the ingress is reachable:
 | Argo `Unknown` / sync errors | Repo Secret in `argocd` namespace, placeholder URLs still present, or chart path `charts/spice-instance` / `valueFiles` path. |
 | Vault read/write errors | `VAULT_TOKEN` in the control-plane Secret, KV v2 mount path, and Vault policies allowing the token to read/write `spice/instances/*`. |
 | ExternalSecret not syncing | `ClusterSecretStore` status, `vault-eso-token` Secret, and `externalSecret.vaultPath` in instance `values.yaml`. |
-| `no matches for kind "ClusterSecretStore"` | External Secrets **CRDs not installed** yet: finish step 4, run `kubectl get crd clustersecretstores.external-secrets.io`, wait for `external-secrets` Deployment ready, then re-apply the manifest. |
+| `ClusterRole is not permitted in project spice-platform` | The `AppProject` **`clusterResourceWhitelist`** must allow RBAC objects installed by the control-plane chart. Update [`gitops/apps/app-project.yaml`](../gitops/apps/app-project.yaml) to include `ClusterRole` and `ClusterRoleBinding` for group `rbac.authorization.k8s.io`, commit, push, and sync. |
 | `Resource not found in cluster: v1/Service:control-plane` | Namespaced objects were applied to **`default`** while Argo tracks **`control-plane`**. This chart now pins `metadata.namespace` (see `deploy/helm/control-plane/templates/_helpers.tpl`). Commit/push, **Refresh + Sync** the `control-plane` Application; remove stray `Service`/`Deployment` in `default` if they exist (check with `kubectl get svc,deploy -n default`). |
 
 ---
