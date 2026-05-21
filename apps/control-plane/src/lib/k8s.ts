@@ -81,7 +81,7 @@ export async function listExternalSecrets(): Promise<unknown[]> {
   try {
     const res = (await customObjects.listNamespacedCustomObject({
       group: "external-secrets.io",
-      version: "v1beta1",
+      version: "v1",
       namespace: ns,
       plural: "externalsecrets",
     })) as { items?: unknown[] };
