@@ -48,7 +48,7 @@ Prerequisites:
      -f gitops/bootstrap/values-external-secrets.yaml
    ```
 
-   **Verify CRDs before step 6:** if you apply `ClusterSecretStore` too early, `kubectl` will report `no matches for kind "ClusterSecretStore"` because the API is not registered yet. Wait until the CRD exists:
+   **Verify CRDs before you apply the ClusterSecretStore (step 7):** if you apply `ClusterSecretStore` too early, `kubectl` will report `no matches for kind "ClusterSecretStore"` because the API is not registered yet. Wait until the CRD exists:
 
    ```bash
    kubectl get pods -n external-secrets
@@ -57,7 +57,7 @@ Prerequisites:
 
    You should see the CRD (Established). If `kubectl get crd ...` returns **NotFound**, fix the Helm release first (`helm status -n external-secrets external-secrets`, reinstall with `installCRDs: true` as in [`gitops/bootstrap/values-external-secrets.yaml`](../gitops/bootstrap/values-external-secrets.yaml)).
 
-5. **Vault token for ESO** (lab pattern): External Secrets needs a **Kubernetes Secret** that contains the Vault token. The example [`ClusterSecretStore`](../gitops/bootstrap/manifests/cluster-secret-store.example.yaml) points at:
+5. **Vault token for ESO** (lab pattern): External Secrets needs a **Kubernetes Secret** that contains the Vault token. The committed [`ClusterSecretStore`](../gitops/bootstrap/manifests/cluster-secret-store.yaml) points at:
 
    - **Secret name:** `vault-eso-token`
    - **Namespace:** `external-secrets` (same namespace where you installed the ESO Helm release in step 4)
@@ -94,21 +94,30 @@ Prerequisites:
 
    You should see your token printed (avoid shared screens / logs in real environments).
 
-6. Apply the **ClusterSecretStore** (edit server URL if your Vault release differs):
-
-   ```bash
-   cp gitops/bootstrap/manifests/cluster-secret-store.example.yaml /tmp/cluster-secret-store.yaml
-   # edit if needed, then:
-   kubectl apply -f /tmp/cluster-secret-store.yaml
-   ```
-
-7. **KV mount** (if not already present): enable KV v2 at path `secret` (default in many Vault dev setups). Example:
+6. **KV mount** (before the ClusterSecretStore): enable KV v2 at path `secret` so it matches [`cluster-secret-store.yaml`](../gitops/bootstrap/manifests/cluster-secret-store.yaml) (`spec.provider.vault.path: secret`). Example:
 
    ```bash
    kubectl -n vault exec -it vault-0 -- vault secrets enable -path=secret kv-v2
    ```
 
-   (Skip if the mount already exists.)
+   If the mount already exists, Vault prints an error such as `path is already in use` — that is fine; continue to step 7.
+
+7. Apply the **ClusterSecretStore** (edit `server` in the manifest if your Vault Service differs), then confirm it becomes **Ready**:
+
+   ```bash
+   kubectl apply -f gitops/bootstrap/manifests/cluster-secret-store.yaml
+   kubectl get clustersecretstore vault-backend
+   ```
+
+   You should see `READY` **True** after a short wait. If `STATUS` is **InvalidProviderConfig** or `READY` stays **False**, inspect the controller message (it usually names the exact failure):
+
+   ```bash
+   kubectl describe clustersecretstore vault-backend
+   ```
+
+   Typical causes: **`vault-eso-token` missing or wrong key** (must be data key `token` in namespace `external-secrets`); **wrong Vault URL** in the manifest (default `http://vault.vault.svc.cluster.local:8200` matches a Helm release named `vault` in namespace `vault`); **token invalid or expired**; **Vault pod not Ready**; **no KV v2 mount at path `secret`** (fix step 6, then delete and re-apply the ClusterSecretStore or wait for reconciliation).
+
+   If the store object is missing entirely, every `ExternalSecret` that references `vault-backend` stays **Degraded** with `ClusterSecretStore ... not found`.
 
 8. Install **Argo CD**:
 
@@ -195,6 +204,8 @@ After the ingress is reachable:
 | `403` from GitHub API | Token scopes, `GITHUB_OWNER` / `GITHUB_REPO`, branch name, and whether branch protection blocks the automation user. |
 | Argo `Unknown` / sync errors | Repo Secret in `argocd` namespace, placeholder URLs still present, or chart path `charts/spice-instance` / `valueFiles` path. |
 | Vault read/write errors | `VAULT_TOKEN` in the control-plane Secret, KV v2 mount path, and Vault policies allowing the token to read/write `spice/instances/*`. |
+| ClusterSecretStore **InvalidProviderConfig** / `READY=False` | Run `kubectl describe clustersecretstore vault-backend` and read **Events** / status (connection errors, 403, “could not get secret”, wrong key). Confirm `kubectl -n external-secrets get secret vault-eso-token` and the data key is **`token`**. Confirm Vault is up (`kubectl -n vault get pods`) and the KV v2 mount exists at path **`secret`** (tutorial step 6). Fix the issue, then `kubectl delete clustersecretstore vault-backend --ignore-not-found` and `kubectl apply -f gitops/bootstrap/manifests/cluster-secret-store.yaml` so the controller re-validates. |
+| ExternalSecret **Degraded** — `ClusterSecretStore "vault-backend" not found` | The store is **cluster-scoped** and must be applied once (after ESO CRDs and the `vault-eso-token` Secret). Run `kubectl apply -f gitops/bootstrap/manifests/cluster-secret-store.yaml` and `kubectl get clustersecretstore vault-backend`. If you renamed the store, set `externalSecret.clusterSecretStoreName` in the instance `values.yaml` to match. |
 | ExternalSecret not syncing | `ClusterSecretStore` status, `vault-eso-token` Secret, and `externalSecret.vaultPath` in instance `values.yaml`. |
 | `ClusterRole is not permitted in project spice-platform` | The `AppProject` **`clusterResourceWhitelist`** must allow RBAC objects installed by the control-plane chart. Update [`gitops/apps/app-project.yaml`](../gitops/apps/app-project.yaml) to include `ClusterRole` and `ClusterRoleBinding` for group `rbac.authorization.k8s.io`, commit, push, and sync. |
 | `Resource not found in cluster: ... ClusterRoleBinding` / `ClusterRole` | Argo is comparing live state before a successful sync, or the UI is stale after fixing `AppProject`. Apply the updated [`gitops/apps/app-project.yaml`](../gitops/apps/app-project.yaml) if needed, then **Hard Refresh** and **Sync** the `control-plane` Application. List cluster RBAC and look for the release name plus `-gitops` (for example `control-plane-gitops` when `helm.releaseName` is `control-plane`). |

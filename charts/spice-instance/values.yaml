@@ -12,6 +12,7 @@ ingress:
     secretName: ""
 
 # Optional: External Secrets pulls Vault KV into a Kubernetes Secret for Spice env.
+# Requires a ClusterSecretStore named clusterSecretStoreName (default vault-backend); see gitops/bootstrap/manifests/cluster-secret-store.yaml.
 externalSecret:
   enabled: false
   clusterSecretStoreName: vault-backend

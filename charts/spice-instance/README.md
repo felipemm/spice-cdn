@@ -25,6 +25,8 @@ Set `ingress.enabled: true` and **`ingress.host`** to a hostname that resolves t
 
 When `externalSecret.enabled: true`, this chart renders an `ExternalSecret` that uses the cluster `ClusterSecretStore` named `externalSecret.clusterSecretStoreName` (default `vault-backend`) and syncs Vault path `externalSecret.vaultPath` into `externalSecret.targetSecretName`.
 
+**Prerequisite:** that `ClusterSecretStore` must exist on the cluster (for this repo, apply [`gitops/bootstrap/manifests/cluster-secret-store.yaml`](../../gitops/bootstrap/manifests/cluster-secret-store.yaml) during bootstrap; see `docs/tutorial.md`). If the store is missing, `ExternalSecret` stays **Degraded** with `ClusterSecretStore ... not found`.
+
 Regenerate vendored dependency (if you bump the version in `Chart.yaml`):
 
 ```bash
