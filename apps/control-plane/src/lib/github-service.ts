@@ -1,7 +1,32 @@
 import { Octokit } from "@octokit/rest";
+import YAML from "yaml";
 import { assertGithubConfigured } from "@/lib/config";
 
 const instancesPrefix = "instances";
+
+type InstanceIngress = {
+  enabled?: boolean;
+  host?: string;
+};
+
+/** Public browser URL for the Spice HTTP API from instance values.yaml (ingress.host). */
+export function spicePublicUrlFromValuesYaml(yamlText: string): string | null {
+  let doc: unknown;
+  try {
+    doc = YAML.parse(yamlText);
+  } catch {
+    return null;
+  }
+  if (!doc || typeof doc !== "object") return null;
+  const ingress = (doc as { ingress?: InstanceIngress }).ingress;
+  if (!ingress) return null;
+  if (ingress.enabled === false) return null;
+  const host = ingress.host;
+  if (typeof host !== "string" || !host.trim()) return null;
+  const h = host.trim();
+  const scheme = h.includes("127.0.0.1") ? "http" : "https";
+  return `${scheme}://${h}`;
+}
 
 export function createOctokit() {
   const { token } = assertGithubConfigured();
@@ -29,6 +54,24 @@ export async function listInstanceNames(): Promise<string[]> {
     }
     throw e;
   }
+}
+
+export type InstanceListEntry = { name: string; url: string | null };
+
+export async function listInstancesWithUrls(): Promise<InstanceListEntry[]> {
+  const names = await listInstanceNames();
+  const entries = await Promise.all(
+    names.map(async (name): Promise<InstanceListEntry> => {
+      try {
+        const { content } = await getValuesYaml(name);
+        return { name, url: spicePublicUrlFromValuesYaml(content) };
+      } catch {
+        return { name, url: null };
+      }
+    }),
+  );
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  return entries;
 }
 
 export async function getValuesYaml(name: string): Promise<{ content: string; sha: string }> {

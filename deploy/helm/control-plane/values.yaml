@@ -1,9 +1,13 @@
 replicaCount: 1
 
 image:
-  repository: spice-control-plane
+  # Pushed by .github/workflows/control-plane-image.yml to GHCR; tag is bumped to the Git SHA on each publish so Argo CD rolls the Deployment.
+  repository: ghcr.io/felipemm/spice-cdn/control-plane
   tag: latest
   pullPolicy: IfNotPresent
+
+# When the GHCR package is private, create a docker-registry secret and reference it here, e.g. [ { name: ghcr-pull } ].
+imagePullSecrets: []
 
 service:
   type: ClusterIP

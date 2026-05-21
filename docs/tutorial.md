@@ -7,6 +7,8 @@ Prerequisites:
 - Docker, [Kind](https://kind.sigs.k8s.io/docs/user/quick-start/), `kubectl`, and [Helm 3](https://helm.sh/docs/intro/install/).
 - A **GitHub repository** you control (fork or copy this repo), and a **PAT** or fine-grained token with **`contents: write`** on that repo (for the control plane) and read for Argo CD.
 
+Throughout **Part A**, each step ends with **Validate**: commands to run and what you should see. **Parts B–D** add validations for the image, the control-plane Secret, and the running web UI. If a check fails, fix it before continuing (see [Troubleshooting](#troubleshooting) below).
+
 ---
 
 ## Part A — Day 0: create the Kind cluster
@@ -16,6 +18,16 @@ Prerequisites:
    ```bash
    make kind-create
    ```
+
+   **Validate:**
+
+   ```bash
+   kind get clusters
+   kubectl config current-context
+   kubectl get nodes
+   ```
+
+   Expect: cluster name **`spice-gitops`** (see [`Makefile`](../Makefile) `CLUSTER_NAME`), kubectl context is **`kind-spice-gitops`**, every node **`Ready`**.
 
 2. Install **ingress-nginx** (controller uses **hostPort** 80/443 so Kind’s `extraPortMappings` in [`hack/kind-config.yaml`](../hack/kind-config.yaml) reach nginx; a plain high `NodePort` alone would not):
 
@@ -27,6 +39,16 @@ Prerequisites:
      -f gitops/bootstrap/values-ingress-nginx.yaml
    ```
 
+   **Validate:**
+
+   ```bash
+   kubectl -n ingress-nginx wait --for=condition=available deploy --all --timeout=120s
+   kubectl -n ingress-nginx get pods
+   curl -sI --connect-timeout 3 http://127.0.0.1/ | head -5
+   ```
+
+   Expect: ingress controller pod(s) **`Running`**, `curl` returns **`HTTP/1.1`** (often **404** from nginx with no matching `Ingress` — that is fine; **connection refused** means host port 80 is not wired to the controller).
+
 3. Install **Vault** (reference values enable a **dev-style** server suitable only for disposable labs; see comments in [`gitops/bootstrap/values-vault.yaml`](../gitops/bootstrap/values-vault.yaml)):
 
    ```bash
@@ -36,7 +58,15 @@ Prerequisites:
      -f gitops/bootstrap/values-vault.yaml
    ```
 
-   Wait for `vault-0` to be Running. With `server.dev.enabled`, Vault auto-unseals in dev mode for local testing only.
+   **Validate:**
+
+   ```bash
+   kubectl -n vault wait --for=condition=ready pod/vault-0 --timeout=120s
+   kubectl -n vault get svc vault
+   kubectl -n vault exec vault-0 -- vault status -format=json
+   ```
+
+   Expect: `vault-0` **`Running`**, Service **`vault`** exists in namespace **`vault`**, `vault status` shows **`sealed`** **false** (dev mode auto-unseals).
 
 4. Install **External Secrets Operator**:
 
@@ -48,14 +78,15 @@ Prerequisites:
      -f gitops/bootstrap/values-external-secrets.yaml
    ```
 
-   **Verify CRDs before you apply the ClusterSecretStore (step 7):** if you apply `ClusterSecretStore` too early, `kubectl` will report `no matches for kind "ClusterSecretStore"` because the API is not registered yet. Wait until the CRD exists:
+   **Validate:**
 
    ```bash
+   kubectl -n external-secrets wait --for=condition=available deploy --all --timeout=120s
    kubectl get pods -n external-secrets
    kubectl get crd clustersecretstores.external-secrets.io
    ```
 
-   You should see the CRD (Established). If `kubectl get crd ...` returns **NotFound**, fix the Helm release first (`helm status -n external-secrets external-secrets`, reinstall with `installCRDs: true` as in [`gitops/bootstrap/values-external-secrets.yaml`](../gitops/bootstrap/values-external-secrets.yaml)).
+   Expect: ESO pod(s) **`Running`**, CRD **`clustersecretstores.external-secrets.io`** exists with **`Established`** (if `kubectl get crd ...` returns **NotFound**, fix the Helm release: `helm status -n external-secrets external-secrets`, reinstall with `installCRDs: true` as in [`gitops/bootstrap/values-external-secrets.yaml`](../gitops/bootstrap/values-external-secrets.yaml)). Do **not** apply the `ClusterSecretStore` until this CRD exists.
 
 5. **Vault token for ESO** (lab pattern): External Secrets needs a **Kubernetes Secret** that contains the Vault token. The committed [`ClusterSecretStore`](../gitops/bootstrap/manifests/cluster-secret-store.yaml) points at:
 
@@ -86,13 +117,14 @@ Prerequisites:
      --from-literal=token='PASTE_YOUR_VAULT_TOKEN_HERE'
    ```
 
-   **5c — Verify (optional):**
+   **5c — Validate the Secret:**
 
    ```bash
+   kubectl -n external-secrets get secret vault-eso-token -o jsonpath='{.data.token}' | base64 -d | wc -c
    kubectl -n external-secrets get secret vault-eso-token -o jsonpath='{.data.token}' | base64 -d; echo
    ```
 
-   You should see your token printed (avoid shared screens / logs in real environments).
+   Expect: byte count **greater than zero** (non-empty token), decoded value matches your Vault root token (avoid shared screens / logs in real environments).
 
 6. **KV mount** (before the ClusterSecretStore): enable KV v2 at path `secret` so it matches [`cluster-secret-store.yaml`](../gitops/bootstrap/manifests/cluster-secret-store.yaml) (`spec.provider.vault.path: secret`). Example:
 
@@ -102,6 +134,14 @@ Prerequisites:
 
    If the mount already exists, Vault prints an error such as `path is already in use` — that is fine; continue to step 7.
 
+   **Validate:**
+
+   ```bash
+   kubectl -n vault exec vault-0 -- vault secrets list
+   ```
+
+   Expect: a line for mount path **`secret/`** (KV v2 engine).
+
 7. Apply the **ClusterSecretStore** (edit `server` in the manifest if your Vault Service differs), then confirm it becomes **Ready**:
 
    ```bash
@@ -109,15 +149,24 @@ Prerequisites:
    kubectl get clustersecretstore vault-backend
    ```
 
-   You should see `READY` **True** after a short wait. If `STATUS` is **InvalidProviderConfig** or `READY` stays **False**, inspect the controller message (it usually names the exact failure):
+   **Validate:**
+
+   ```bash
+   kubectl wait --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True clustersecretstore/vault-backend --timeout=120s
+   kubectl get clustersecretstore vault-backend
+   ```
+
+   Expect: **`READY`** column **True** (may take a few seconds). If **`InvalidProviderConfig`** or **`READY=False`**, inspect Events:
 
    ```bash
    kubectl describe clustersecretstore vault-backend
    ```
 
-   Typical causes: **`vault-eso-token` missing or wrong key** (must be data key `token` in namespace `external-secrets`); **wrong Vault URL** in the manifest (default `http://vault.vault.svc.cluster.local:8200` matches a Helm release named `vault` in namespace `vault`); **token invalid or expired**; **Vault pod not Ready**; **no KV v2 mount at path `secret`** (fix step 6, then delete and re-apply the ClusterSecretStore or wait for reconciliation).
+   Typical causes: **`vault-eso-token` missing or wrong key** (must be data key `token` in namespace `external-secrets`); **wrong Vault URL** in the manifest (default `http://vault.vault.svc.cluster.local:8200` matches a Helm release named `vault` in namespace `vault`); **token invalid or expired**; **Vault pod not Ready**; **no KV v2 mount at path `secret`** (fix step 6, then `kubectl delete clustersecretstore vault-backend --ignore-not-found` and re-apply this manifest).
 
    If the store object is missing entirely, every `ExternalSecret` that references `vault-backend` stays **Degraded** with `ClusterSecretStore ... not found`.
+
+   > **Note:** `kubectl wait` with `jsonpath` requires kubectl **1.27+**. On older kubectl, poll with `kubectl get clustersecretstore vault-backend` until `READY` is **True**, or rely on `describe` above.
 
 8. Install **Argo CD**:
 
@@ -128,11 +177,41 @@ Prerequisites:
      -f gitops/bootstrap/values-argocd.yaml
    ```
 
+   **Validate:**
+
+   ```bash
+   kubectl -n argocd rollout status deploy/argocd-server --timeout=180s
+   kubectl -n argocd get pods
+   kubectl -n argocd get secret argocd-initial-admin-secret
+   kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d | wc -c
+   kubectl -n argocd get ingress
+   curl -sI -H "Host: argocd.127.0.0.1.nip.io" --connect-timeout 3 http://127.0.0.1/ | head -5
+   ```
+
+   **Argo CD initial `admin` password:** log in to the UI (or CLI) as user **`admin`**. To print the bootstrap password from the cluster (stored base64-encoded in the Secret):
+
+   ```bash
+   kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+   ```
+
+   The decoded string has no trailing newline. After you change the admin password or delete `argocd-initial-admin-secret`, this Secret is gone and you must use whatever credentials you configured instead.
+
+   Expect: `argocd-server` (and related) pods **`Running`**, the **`kubectl ... get secret argocd-initial-admin-secret`** line succeeds (Secret present), password length **> 0** bytes from the **`wc -c`** line (unless you already removed the Secret after rotating the admin user), an **Ingress** for Argo CD (see [`values-argocd.yaml`](../gitops/bootstrap/values-argocd.yaml) `server.ingress`), `curl` returns **`HTTP/1.1`** with **`302`** or **`200`** (not connection refused). Open **`http://argocd.127.0.0.1.nip.io/`** in a browser if you use the default hostname, then sign in as **`admin`** with the password from the command above.
+
 9. **Wire Argo CD to GitHub**: create a `repository` Secret in `argocd` (see [`gitops/bootstrap/manifests/github-repo-secret.example.yaml`](../gitops/bootstrap/manifests/github-repo-secret.example.yaml)). Replace org/repo and PAT, then:
 
    ```bash
    kubectl apply -f gitops/bootstrap/manifests/github-repo-secret.example.yaml
    ```
+
+   **Validate:**
+
+   ```bash
+   kubectl -n argocd get secret -l argocd.argoproj.io/secret-type=repository
+   kubectl -n argocd get secret github-gitops -o jsonpath='{.data.url}' | base64 -d; echo
+   ```
+
+   Expect: at least one **repository** Secret with label **`argocd.argoproj.io/secret-type=repository`**. If you applied the example as-is, **`github-gitops`** exists and its `url` decodes to your GitHub **HTTPS** repo URL (no `CHANGE_ME` left). If you created the Secret under another name, substitute it in the `jsonpath` command.
 
 10. **Replace placeholders** in GitOps manifests with your GitHub coordinates:
 
@@ -143,25 +222,74 @@ Prerequisites:
 
     Commit and push these changes to your GitHub `main` branch.
 
+    **Validate (local repo):**
+
+    ```bash
+    if grep -rF 'CHANGE_ME' gitops/apps/ gitops/bootstrap/manifests/application-root.yaml 2>/dev/null; then
+      echo 'ERROR: replace CHANGE_ME placeholders'
+      exit 1
+    else
+      echo 'OK: no CHANGE_ME in listed paths'
+    fi
+    git status
+    ```
+
+    Expect: **`OK: no CHANGE_ME...`**, then `git status` shows a clean tree after commit (or only commits you still intend to push).
+
 11. **Bootstrap the root Application** (one-time; this file is intentionally **outside** `gitops/apps/` to avoid self-recursion):
 
     ```bash
     kubectl apply -f gitops/bootstrap/manifests/application-root.yaml
     ```
 
-    In the Argo CD UI (optional break-glass) or via automation, confirm `platform-gitops` syncs and child resources become Healthy.
+    **Validate:**
+
+    ```bash
+    kubectl -n argocd get application platform-gitops -o wide
+    kubectl -n argocd get applications
+    kubectl -n argocd wait --for=jsonpath='{.status.health.status}'=Healthy application/platform-gitops --timeout=600s
+    ```
+
+    Expect: **`platform-gitops`** exists; **Sync** moves toward **Synced** and **Health** toward **Healthy** as child `Application`s under [`gitops/apps/`](../gitops/apps/) reconcile (first sync can take several minutes). If children stay **Unknown** for Git, re-check the repository Secret (step 9) and repo URLs in manifests.
+
+    > **Note:** `kubectl wait` may time out while children are still syncing; re-run `kubectl -n argocd get applications` until the **control-plane** and instance apps look healthy, or use the Argo CD UI (**Optional: break-glass** below).
 
 12. **Namespaces**: ensure `spice-instances` and `control-plane` exist (the control-plane `Application` uses `CreateNamespace=true`; you can also create them manually).
 
+    **Validate:**
+
+    ```bash
+    kubectl get ns spice-instances control-plane
+    ```
+
+    Expect: both namespaces **`Active`**. If missing, either wait for Argo to create **`control-plane`**, or `kubectl create namespace spice-instances` (and **`control-plane`**) manually, then sync again.
+
 ---
 
-## Part B — Build and load the control plane image
+## Part B — Control plane image on GHCR (Kind pulls like any cluster)
 
-From the repository root:
+**Kind uses the same image as production:** [`deploy/helm/control-plane/values.yaml`](../deploy/helm/control-plane/values.yaml) points at **`ghcr.io/<owner>/<repo>/control-plane`** with an immutable **`image.tag`** (Git SHA) after CI runs. Kind nodes pull from **ghcr.io** over the network (no `kind load`).
+
+1. In GitHub, run **Actions → Control plane image → Run workflow** on `main` at least once (or merge a change under `apps/control-plane/` so the workflow runs). Wait until it finishes and the follow-up commit has updated **`image.tag`** in Git.
+2. Ensure the GHCR package is **pullable** from your machine: **public**, or configure [`imagePullSecrets`](../deploy/helm/control-plane/values.yaml) plus a docker-registry secret in the **`control-plane`** namespace.
+
+**Validate:**
+
+```bash
+kind get clusters | grep -F 'spice-gitops' || kind get clusters
+# Optional: confirm the tag in Git matches what you expect Argo to deploy
+grep -E '^\s+repository:|^\s+tag:' deploy/helm/control-plane/values.yaml
+```
+
+Expect: cluster **`spice-gitops`** exists when you continue from Part A; `repository` / `tag` reference GHCR (tag is a **40-character SHA** after CI, or **`latest`** only before the first successful publish—prefer running the workflow first so Argo pulls a real tag).
+
+### Optional: local image into Kind (air-gapped / fast iteration)
+
+If you cannot use GHCR from Kind, build and load a local tag, then override Helm on the Argo `Application` (for example **`image.repository=spice-control-plane`**, **`image.tag=latest`**) after:
 
 ```bash
 make image-build
-make image-load
+make image-load-local
 ```
 
 ---
@@ -179,12 +307,33 @@ kubectl -n control-plane create secret generic control-plane-secrets \
   --from-literal=admin_api_key='YOUR_LONG_RANDOM_ADMIN_KEY'
 ```
 
+**Validate:**
+
+```bash
+for k in github_token vault_token admin_api_key; do
+  echo -n "$k: "
+  kubectl -n control-plane get secret control-plane-secrets -o jsonpath="{.data.$k}" | wc -c
+done
+```
+
+Expect: each key reports a **non-zero** base64 payload size (typically tens of characters or more).
+
 Edit [`deploy/helm/control-plane/values.yaml`](../deploy/helm/control-plane/values.yaml) (or use `--set` when installing) so that:
 
 - `env.githubOwner`, `env.githubRepo`, `env.githubBranch` match your repository.
 - `ingress.host` is a hostname under `127.0.0.1.nip.io` (or your DNS) pointing at `127.0.0.1` where Kind maps ports 80/443.
 
-Argo CD will deploy the chart when the `control-plane` `Application` syncs from Git.
+Argo CD will deploy the chart when the `control-plane` `Application` syncs from Git. The workload image defaults to **GHCR**; after the first successful run of the **Control plane image** workflow, `image.tag` in Git is the commit SHA that built that image so each release rolls out cleanly.
+
+**Validate (after Argo has synced the `control-plane` app at least once):**
+
+```bash
+kubectl -n argocd get application control-plane -o wide
+kubectl -n control-plane rollout status deploy/control-plane --timeout=300s
+kubectl -n control-plane exec deploy/control-plane -- node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>r.text().then(t=>{console.log(t);if(!r.ok)process.exit(1)}))"
+```
+
+Expect: **`control-plane`** `Application` is **Synced** / **Healthy** (may take a minute after Git push), Deployment reaches **available**, the `node` one-liner prints JSON like **`{"ok":true,...}`**. If the `Application` is missing, complete step 11 and push chart changes so Argo creates it.
 
 ---
 
@@ -196,6 +345,16 @@ After the ingress is reachable:
 2. **Instances**: create, edit `values.yaml`, delete — all commits go to GitHub under `instances/<name>/values.yaml`.
 3. **Secrets**: the **Vault** panel writes KV to `spice/instances/<name>`; the chart’s `ExternalSecret` syncs into the Kubernetes `Secret` referenced by Spice `additionalEnv` (see [Spice Helm env pattern](https://spiceai.org/docs/deployment/kubernetes)).
 4. **Admin** (`/admin`): paste `ADMIN_API_KEY` to load stack summary (Argo Applications, ESO resources, Vault health, pod snapshots). Use **Sync** / **Refresh** on an Argo `Application` name (for example `spice-example`) without opening the Argo UI.
+
+**Validate (through ingress, same host as `ingress.host` in chart values):**
+
+```bash
+CP_HOST=control-plane.127.0.0.1.nip.io
+curl -sf "http://${CP_HOST}/api/health"
+curl -sfI "http://${CP_HOST}/" | head -5
+```
+
+Expect: JSON **`{"ok":true,...}`** from `/api/health`, and **`HTTP/1.1`** from `/` (**`200`** or a Next.js redirect — not connection refused). Set **`CP_HOST`** to match your `deploy/helm/control-plane/values.yaml` `ingress.host` if you changed it.
 
 ### Troubleshooting
 
@@ -211,14 +370,17 @@ After the ingress is reachable:
 | `ClusterRole is not permitted in project spice-platform` | The `AppProject` **`clusterResourceWhitelist`** must allow RBAC objects installed by the control-plane chart. Update [`gitops/apps/app-project.yaml`](../gitops/apps/app-project.yaml) to include `ClusterRole` and `ClusterRoleBinding` for group `rbac.authorization.k8s.io`, commit, push, and sync. |
 | `Resource not found in cluster: ... ClusterRoleBinding` / `ClusterRole` | Argo is comparing live state before a successful sync, or the UI is stale after fixing `AppProject`. Apply the updated [`gitops/apps/app-project.yaml`](../gitops/apps/app-project.yaml) if needed, then **Hard Refresh** and **Sync** the `control-plane` Application. List cluster RBAC and look for the release name plus `-gitops` (for example `control-plane-gitops` when `helm.releaseName` is `control-plane`). |
 | `control-plane.*.nip.io` does not load (connection refused, timeout) | Kind maps **host** `127.0.0.1:80` to the **node** port 80. Bootstrap values must set **`controller.hostPort.enabled: true`** (see [`gitops/bootstrap/values-ingress-nginx.yaml`](../gitops/bootstrap/values-ingress-nginx.yaml)); otherwise the Service uses a high `NodePort` and nothing listens on 80. Re-run the Helm upgrade for ingress-nginx, wait for the controller pod to be Ready, then try `curl -sI -H "Host: control-plane.127.0.0.1.nip.io" http://127.0.0.1/`. On macOS, another process using port 80 can block Kind; check with `sudo lsof -iTCP:80 -sTCP:LISTEN`. |
+| `argocd.*.nip.io` does not load | Same ingress-nginx / Kind port **80** checklist as the row above. Confirm the Argo CD Ingress exists: `kubectl -n argocd get ingress`. Re-apply values with `helm upgrade --install argocd ... -f gitops/bootstrap/values-argocd.yaml` if `server.ingress.enabled` was still false. |
+| `ImagePullBackOff` / **`Failed to pull image`** `ghcr.io/.../control-plane` | Confirm the **Control plane image** workflow has run and the tag in Git matches GHCR. For a **private** package, add a docker-registry pull secret in `control-plane` and set **`imagePullSecrets`** in [`deploy/helm/control-plane/values.yaml`](../deploy/helm/control-plane/values.yaml). For **Kind without GHCR**, override Helm `image.repository` / `image.tag` to your locally loaded image (see Part B, GitHub Actions + GHCR). |
 | `Resource not found in cluster: v1/Service:control-plane` | Namespaced objects were applied to **`default`** while Argo tracks **`control-plane`**. This chart now pins `metadata.namespace` (see `deploy/helm/control-plane/templates/_helpers.tpl`). Commit/push, **Refresh + Sync** the `control-plane` Application; remove stray `Service`/`Deployment` in `default` if they exist (check with `kubectl get svc,deploy -n default`). |
 
 ---
 
 ## Optional: break-glass
 
-- `kubectl -n argocd port-forward svc/argocd-server 8080:443` to reach Argo CD when ingress is not configured.
-- Never rely on this for routine operations if you want a strict control-plane-only workflow.
+- Prefer the Ingress URL **`http://argocd.127.0.0.1.nip.io/`** (see [`gitops/bootstrap/values-argocd.yaml`](../gitops/bootstrap/values-argocd.yaml)); it stays available whenever ingress-nginx and Argo CD are running.
+- If the Ingress is broken or you are off-cluster: `kubectl -n argocd port-forward svc/argocd-server 8080:80` (HTTP service port when `server.insecure` is enabled).
+- Never rely on port-forward for routine operations if you want a strict control-plane-only workflow.
 
 ---
 

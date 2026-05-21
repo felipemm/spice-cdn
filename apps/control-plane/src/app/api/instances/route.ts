@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { listInstanceNames, createInstance } from "@/lib/github-service";
+import { createInstance, listInstancesWithUrls } from "@/lib/github-service";
 import { renderInstanceTemplate } from "@/lib/instance-template";
 
 export async function GET() {
   try {
-    const names = await listInstanceNames();
-    return NextResponse.json({ instances: names });
+    const instances = await listInstancesWithUrls();
+    return NextResponse.json({ instances });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

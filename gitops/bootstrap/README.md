@@ -20,7 +20,7 @@ See [docs/tutorial.md](../docs/tutorial.md) for exact commands.
 | `values-ingress-nginx.yaml` | `ingress-nginx` controller for Kind: `NodePort` Service plus **hostPort** 80/443 so host port mappings reach nginx. |
 | `values-vault.yaml` | Single-replica Vault for local labs (explicit security caveats in comments). |
 | `values-external-secrets.yaml` | External Secrets Operator defaults. |
-| `values-argocd.yaml` | Argo CD server settings; optional UI exposure (prefer control plane `/admin`). |
+| `values-argocd.yaml` | Argo CD server settings; UI on **`http://argocd.127.0.0.1.nip.io/`** via nginx Ingress (lab `insecure` mode; prefer control plane `/admin` for day‑2). |
 | `manifests/cluster-secret-store.yaml` | Cluster-scoped Vault backend for ESO (`vault-backend`); apply after `vault-eso-token` exists. |
 | `manifests/github-repo-secret.example.yaml` | Template for Argo’s `repo` Secret (HTTPS + PAT / token). |
 

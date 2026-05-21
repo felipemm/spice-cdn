@@ -1,13 +1,14 @@
 import Link from "next/link";
-import { listInstanceNames } from "@/lib/github-service";
+import type { InstanceListEntry } from "@/lib/github-service";
+import { listInstancesWithUrls } from "@/lib/github-service";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  let instances: string[] = [];
+  let instances: InstanceListEntry[] = [];
   let error: string | null = null;
   try {
-    instances = await listInstanceNames();
+    instances = await listInstancesWithUrls();
   } catch (e) {
     error = e instanceof Error ? e.message : "Unknown error";
   }
@@ -30,12 +31,26 @@ export default async function HomePage() {
         {instances.length === 0 && !error && (
           <li className="px-3 py-4 text-sm text-neutral-500">No instances yet.</li>
         )}
-        {instances.map((n) => (
-          <li key={n} className="flex items-center justify-between px-3 py-3">
-            <span className="font-mono text-sm">{n}</span>
+        {instances.map(({ name, url }) => (
+          <li key={name} className="flex flex-col gap-1 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 space-y-0.5">
+              <span className="font-mono text-sm">{name}</span>
+              {url ? (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block truncate text-xs text-emerald-400/90 hover:text-emerald-300"
+                >
+                  {url}
+                </a>
+              ) : (
+                <span className="text-xs text-neutral-500">No ingress host in values.yaml</span>
+              )}
+            </div>
             <Link
-              href={`/instances/${encodeURIComponent(n)}`}
-              className="text-sm text-sky-400 hover:text-sky-300"
+              href={`/instances/${encodeURIComponent(name)}`}
+              className="shrink-0 text-sm text-sky-400 hover:text-sky-300"
             >
               Open
             </Link>

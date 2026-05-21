@@ -19,17 +19,18 @@ This repository implements a **Next.js control plane** that manages **Spice.ai**
 - [Spice Helm on Kubernetes](https://spiceai.org/docs/deployment/kubernetes)
 - [External Secrets — Vault provider](https://external-secrets.io/latest/provider/hashicorp-vault/)
 
-## Build the control plane image
+## Control plane image
+
+**GitOps / cluster:** On push to `main` (when `apps/control-plane` changes), [`.github/workflows/control-plane-image.yml`](.github/workflows/control-plane-image.yml) builds the app, pushes **`ghcr.io/<owner>/<repo>/control-plane`** with tags **`latest`** and **`<git-sha>`**, and commits the new **`image.tag`** into [`deploy/helm/control-plane/values.yaml`](deploy/helm/control-plane/values.yaml) so Argo CD rolls out the new image. Use **Actions → Control plane image → Run workflow** to bootstrap the first image after enabling Actions.
+
+**Local Kind (no registry):**
 
 ```bash
 make image-build
-```
-
-For Kind:
-
-```bash
 make kind-create
 make image-load
 ```
+
+Override the Argo Helm values to use `spice-control-plane:latest` if the cluster should use the image loaded into Kind instead of GHCR (see [tutorial](docs/tutorial.md) GHCR section).
 
 Full bootstrap and configuration variables are documented in **[`docs/tutorial.md`](docs/tutorial.md)**.

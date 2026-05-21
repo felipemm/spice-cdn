@@ -7,7 +7,11 @@ server:
   extraArgs:
     - --insecure
   ingress:
-    enabled: false
+    # Same Kind + ingress-nginx pattern as the control plane (hostPort 80 → 127.0.0.1).
+    enabled: true
+    ingressClassName: nginx
+    hostname: argocd.127.0.0.1.nip.io
+    tls: false
   resources:
     limits:
       memory: 512Mi
