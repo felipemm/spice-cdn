@@ -17,7 +17,7 @@ Prerequisites:
    make kind-create
    ```
 
-2. Install **ingress-nginx** (controller must bind to host ports 80/443 as configured in Kind):
+2. Install **ingress-nginx** (controller uses **hostPort** 80/443 so Kind’s `extraPortMappings` in [`hack/kind-config.yaml`](../hack/kind-config.yaml) reach nginx; a plain high `NodePort` alone would not):
 
    ```bash
    helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
@@ -198,6 +198,7 @@ After the ingress is reachable:
 | ExternalSecret not syncing | `ClusterSecretStore` status, `vault-eso-token` Secret, and `externalSecret.vaultPath` in instance `values.yaml`. |
 | `ClusterRole is not permitted in project spice-platform` | The `AppProject` **`clusterResourceWhitelist`** must allow RBAC objects installed by the control-plane chart. Update [`gitops/apps/app-project.yaml`](../gitops/apps/app-project.yaml) to include `ClusterRole` and `ClusterRoleBinding` for group `rbac.authorization.k8s.io`, commit, push, and sync. |
 | `Resource not found in cluster: ... ClusterRoleBinding` / `ClusterRole` | Argo is comparing live state before a successful sync, or the UI is stale after fixing `AppProject`. Apply the updated [`gitops/apps/app-project.yaml`](../gitops/apps/app-project.yaml) if needed, then **Hard Refresh** and **Sync** the `control-plane` Application. List cluster RBAC and look for the release name plus `-gitops` (for example `control-plane-gitops` when `helm.releaseName` is `control-plane`). |
+| `control-plane.*.nip.io` does not load (connection refused, timeout) | Kind maps **host** `127.0.0.1:80` to the **node** port 80. Bootstrap values must set **`controller.hostPort.enabled: true`** (see [`gitops/bootstrap/values-ingress-nginx.yaml`](../gitops/bootstrap/values-ingress-nginx.yaml)); otherwise the Service uses a high `NodePort` and nothing listens on 80. Re-run the Helm upgrade for ingress-nginx, wait for the controller pod to be Ready, then try `curl -sI -H "Host: control-plane.127.0.0.1.nip.io" http://127.0.0.1/`. On macOS, another process using port 80 can block Kind; check with `sudo lsof -iTCP:80 -sTCP:LISTEN`. |
 | `Resource not found in cluster: v1/Service:control-plane` | Namespaced objects were applied to **`default`** while Argo tracks **`control-plane`**. This chart now pins `metadata.namespace` (see `deploy/helm/control-plane/templates/_helpers.tpl`). Commit/push, **Refresh + Sync** the `control-plane` Application; remove stray `Service`/`Deployment` in `default` if they exist (check with `kubectl get svc,deploy -n default`). |
 
 ---

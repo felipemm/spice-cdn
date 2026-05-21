@@ -17,7 +17,7 @@ See [docs/tutorial.md](../docs/tutorial.md) for exact commands.
 
 | File | Purpose |
 |------|---------|
-| `values-ingress-nginx.yaml` | `ingress-nginx` controller tuned for Kind (`NodePort` / hostPort pattern). |
+| `values-ingress-nginx.yaml` | `ingress-nginx` controller for Kind: `NodePort` Service plus **hostPort** 80/443 so host port mappings reach nginx. |
 | `values-vault.yaml` | Single-replica Vault for local labs (explicit security caveats in comments). |
 | `values-external-secrets.yaml` | External Secrets Operator defaults. |
 | `values-argocd.yaml` | Argo CD server settings; optional UI exposure (prefer control plane `/admin`). |

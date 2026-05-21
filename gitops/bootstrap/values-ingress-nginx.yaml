@@ -1,8 +1,11 @@
 controller:
   service:
     type: NodePort
+  # Kind maps host 127.0.0.1:80/443 -> the node container's ports 80/443 (see hack/kind-config.yaml).
+  # A plain NodePort service uses high ports (default range 30000-32767), so nothing listens on 80/443
+  # on the node and nip.io URLs fail. hostPort publishes the controller on the node's 80/443 instead.
   hostPort:
-    enabled: false
+    enabled: true
   publishService:
     enabled: true
   watchIngressWithoutClass: true
