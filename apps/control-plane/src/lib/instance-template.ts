@@ -1,4 +1,6 @@
-export const defaultInstanceValuesYaml = `ingress:
+export const defaultInstanceValuesYaml = `ownerLayerSlug: LAYERSLUG
+
+ingress:
   enabled: true
   className: nginx
   host: spice-INSTANCE.127.0.0.1.nip.io
@@ -11,6 +13,8 @@ externalSecret:
   refreshInterval: 1m
 
 spiceai:
+  additionalLabels:
+    owner-layer-slug: LAYERSLUG
   spicepod:
     name: app
     version: v1
@@ -27,6 +31,7 @@ spiceai:
       memory: 1Gi
 `;
 
-export function renderInstanceTemplate(instance: string) {
-  return defaultInstanceValuesYaml.replaceAll("INSTANCE", instance);
+export function renderInstanceTemplate(instance: string, ownerLayerSlug: string) {
+  const slug = ownerLayerSlug.trim();
+  return defaultInstanceValuesYaml.replaceAll("INSTANCE", instance).replaceAll("LAYERSLUG", slug);
 }

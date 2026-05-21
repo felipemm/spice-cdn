@@ -6,6 +6,7 @@ import { useState } from "react";
 export default function NewInstancePage() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [ownerLayerSlug, setOwnerLayerSlug] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -17,7 +18,7 @@ export default function NewInstancePage() {
       const res = await fetch("/api/instances", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, ownerLayerSlug: ownerLayerSlug.trim() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? res.statusText);
@@ -40,6 +41,18 @@ export default function NewInstancePage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="my-demo"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm text-neutral-400">
+            Owner layer slug (lowercase DNS label; cost + budget key)
+          </label>
+          <input
+            className="mt-1 w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 font-mono text-sm"
+            value={ownerLayerSlug}
+            onChange={(e) => setOwnerLayerSlug(e.target.value)}
+            placeholder="team-data"
             required
           />
         </div>

@@ -1,0 +1,12 @@
+# Default per-slug budgets (mounted into control-plane pod as /config/budgets.yaml).
+# Override via Helm values.budgets.definition or edit this file and re-sync Argo.
+defaults:
+  maxInstancesPerSlug: 50
+  # maxEstimatedMonthlyUsdPerSlug: 500
+
+# Per-slug overrides (optional), e.g.:
+# bySlug:
+#   example-team:
+#     maxInstancesPerSlug: 5
+#     maxEstimatedMonthlyUsdPerSlug: 120
+bySlug: {}

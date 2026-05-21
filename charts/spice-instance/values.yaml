@@ -1,6 +1,10 @@
 # Parent chart values. Subchart values live under the `spiceai:` key.
 # See https://spiceai.org/docs/deployment/kubernetes for upstream keys.
 
+# Required: cost attribution + Kyverno. Must match spiceai.additionalLabels["owner-layer-slug"].
+# Override in every per-instance values.yaml (control plane template sets both fields).
+ownerLayerSlug: replace-me
+
 # --- Wrapper: Ingress for this Spice instance ---
 ingress:
   enabled: true
@@ -22,6 +26,9 @@ externalSecret:
 
 # Optional: force stable Service name for Ingress backend (matches Helm subchart naming)
 spiceai:
+  # Upstream merges this into Pod labels via spiceai.labels (keep in sync with ownerLayerSlug).
+  additionalLabels:
+    owner-layer-slug: replace-me
   # Example minimal spicepod — replace in per-instance values.yaml
   spicepod:
     name: app

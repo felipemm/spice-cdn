@@ -1,0 +1,5 @@
+# Mirror of deploy/helm/control-plane/budgets.default.yaml (keep in sync when changing defaults).
+defaults:
+  maxInstancesPerSlug: 50
+
+bySlug: {}

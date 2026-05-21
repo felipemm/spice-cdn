@@ -1,4 +1,6 @@
 # Example instance (safe defaults). Replace ingress.host with a hostname that resolves to your Kind ingress.
+ownerLayerSlug: example
+
 ingress:
   enabled: true
   className: nginx
@@ -12,6 +14,8 @@ externalSecret:
   refreshInterval: 1m
 
 spiceai:
+  additionalLabels:
+    owner-layer-slug: example
   spicepod:
     name: example
     version: v1

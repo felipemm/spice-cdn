@@ -17,3 +17,7 @@ Name helpers for the wrapper chart (parent release).
 {{- define "spice-instance.spiceaiServiceName" -}}
 {{- printf "%s-spiceai" .Release.Name -}}
 {{- end }}
+
+{{- define "spice-instance.ownerLayerSlug" -}}
+{{- required "ownerLayerSlug is required (DNS-like slug for cost / owner-layer-slug label)" .Values.ownerLayerSlug | trim -}}
+{{- end }}

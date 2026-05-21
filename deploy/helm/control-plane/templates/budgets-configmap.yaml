@@ -1,0 +1,16 @@
+{{- if .Values.budgets.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-budgets
+  namespace: {{ include "control-plane.namespace" . }}
+  labels:
+    app.kubernetes.io/name: control-plane
+data:
+  budgets.yaml: |
+{{- if .Values.budgets.definition }}
+{{- .Values.budgets.definition | nindent 4 }}
+{{- else }}
+{{- .Files.Get "budgets.default.yaml" | nindent 4 }}
+{{- end }}
+{{- end }}

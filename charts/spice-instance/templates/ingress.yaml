@@ -1,4 +1,5 @@
 {{- if .Values.ingress.enabled }}
+{{- $slug := include "spice-instance.ownerLayerSlug" . }}
 {{- $host := required "ingress.host is required when ingress.enabled" .Values.ingress.host }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -7,6 +8,7 @@ metadata:
   labels:
     app.kubernetes.io/name: {{ include "spice-instance.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
+    owner-layer-slug: {{ $slug | quote }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}

@@ -1,0 +1,11 @@
+# Ensures ownerLayerSlug is always required for every Helm release (the spiceai subchart does not read it).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "spice-instance.fullname" . }}-cost-attribution
+  labels:
+    app.kubernetes.io/name: {{ include "spice-instance.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    owner-layer-slug: {{ include "spice-instance.ownerLayerSlug" . | quote }}
+data:
+  owner-layer-slug: {{ include "spice-instance.ownerLayerSlug" . | quote }}

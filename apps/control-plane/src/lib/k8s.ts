@@ -4,6 +4,7 @@ import { getArgoNamespace, getSpiceNamespace } from "@/lib/config";
 let cachedApis: {
   customObjects: k8s.CustomObjectsApi;
   core: k8s.CoreV1Api;
+  apps: k8s.AppsV1Api;
 } | null = null;
 
 function getApis() {
@@ -13,6 +14,7 @@ function getApis() {
   cachedApis = {
     customObjects: kubeConfig.makeApiClient(k8s.CustomObjectsApi),
     core: kubeConfig.makeApiClient(k8s.CoreV1Api),
+    apps: kubeConfig.makeApiClient(k8s.AppsV1Api),
   };
   return cachedApis;
 }
@@ -91,9 +93,21 @@ export async function listExternalSecrets(): Promise<unknown[]> {
   }
 }
 
-export async function listPodsInNamespace(namespace: string) {
+export async function listPodsInNamespace(namespace: string, labelSelector?: string) {
   const { core } = getApis();
-  const res = await core.listNamespacedPod({ namespace });
+  const res = await core.listNamespacedPod({
+    namespace,
+    ...(labelSelector ? { labelSelector } : {}),
+  });
+  return res.items;
+}
+
+export async function listStatefulSetsInNamespace(namespace: string, labelSelector?: string) {
+  const { apps } = getApis();
+  const res = await apps.listNamespacedStatefulSet({
+    namespace,
+    ...(labelSelector ? { labelSelector } : {}),
+  });
   return res.items;
 }
 

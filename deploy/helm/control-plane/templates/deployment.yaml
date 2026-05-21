@@ -59,6 +59,22 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.secrets.adminApiKeySecretName }}
                   key: {{ .Values.secrets.adminApiKeySecretKey }}
+            - name: BUDGETS_FILE
+              value: "/config/budgets.yaml"
+            {{- with .Values.cost.opencostBaseUrl }}
+            - name: OPENCOST_BASE_URL
+              value: {{ . | quote }}
+            {{- end }}
+            - name: AWS_COST_EXPLORER_ENABLED
+              value: {{ .Values.cost.awsCostExplorerEnabled | quote }}
+            - name: AWS_REGION
+              value: {{ .Values.cost.awsRegion | quote }}
+            - name: COST_NODE_INSTANCE_TYPE
+              value: {{ .Values.cost.nodeInstanceType | quote }}
+            {{- if .Values.cost.pricingJson }}
+            - name: COST_PRICING_JSON
+              value: {{ .Values.cost.pricingJson | toJson | quote }}
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /api/health
@@ -73,3 +89,15 @@ spec:
             periodSeconds: 20
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.budgets.enabled }}
+          volumeMounts:
+            - name: budgets
+              mountPath: /config
+              readOnly: true
+          {{- end }}
+      {{- if .Values.budgets.enabled }}
+      volumes:
+        - name: budgets
+          configMap:
+            name: {{ .Release.Name }}-budgets
+      {{- end }}

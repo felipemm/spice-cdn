@@ -6,11 +6,13 @@ This repository implements a **Next.js control plane** that manages **Spice.ai**
 
 | Path | Purpose |
 |------|---------|
-| [`apps/control-plane`](apps/control-plane) | Next.js app: instances CRUD via GitHub Contents API, Vault KV editor, Argo sync/refresh + **admin** stack dashboard. |
-| [`charts/spice-instance`](charts/spice-instance) | Wrapper Helm chart around upstream `spiceai` + Ingress + optional `ExternalSecret`. |
+| [`apps/control-plane`](apps/control-plane) | Next.js app: instances CRUD via GitHub Contents API, Vault KV editor, Argo sync/refresh + **admin** stack dashboard + **cost / budgets** (optional OpenCost + AWS Cost Explorer). |
+| [`charts/spice-instance`](charts/spice-instance) | Wrapper Helm chart around upstream `spiceai` + Ingress + optional `ExternalSecret`; requires **`ownerLayerSlug`** / **`owner-layer-slug`** labels. |
 | [`gitops/apps`](gitops/apps) | Argo CD `AppProject`, `ApplicationSet` (`instances/*`), `Application` for the control plane. |
-| [`gitops/bootstrap`](gitops/bootstrap) | Reference Helm values + one-shot manifests (ingress, Vault, ESO, Argo, root `Application`). |
+| [`gitops/bootstrap`](gitops/bootstrap) | Reference Helm values + one-shot manifests (ingress, Vault, ESO, Argo, root `Application`, optional **Kyverno** policy for `owner-layer-slug`). |
 | [`gitops/instances`](gitops/instances) | Per-instance `values.yaml` folders discovered by the `ApplicationSet`. |
+| [`gitops/cost`](gitops/cost) | Budget defaults (mirror of Helm `budgets.default.yaml`; tune per-slug caps). |
+| [`gitops/addons/opencost`](gitops/addons/opencost) | Optional OpenCost install notes + sample Argo Application (commented). |
 | [`hack/kind-config.yaml`](hack/kind-config.yaml) | Kind cluster with ingress-ready node + host port mappings. |
 | [`docs/tutorial.md`](docs/tutorial.md) | **Step-by-step** Kind tutorial (day‑0 bootstrap vs day‑2 webapp-only operations). |
 

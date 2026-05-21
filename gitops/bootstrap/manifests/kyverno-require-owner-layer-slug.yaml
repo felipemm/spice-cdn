@@ -1,0 +1,29 @@
+# Requires Kyverno (https://kyverno.io/) installed on the cluster.
+# Apply after Kyverno CRDs are available: kubectl apply -f this file
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: spice-instances-require-owner-layer-slug
+  annotations:
+    policies.kyverno.io/title: Require owner-layer-slug on Pods
+    policies.kyverno.io/category: Cost governance
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: owner-layer-slug-label
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - spice-instances
+      validate:
+        message: >-
+          Pods in spice-instances must set metadata.labels["owner-layer-slug"]
+          (provision via spice-instance Helm: ownerLayerSlug + spiceai.additionalLabels).
+        pattern:
+          metadata:
+            labels:
+              owner-layer-slug: "*"

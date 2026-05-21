@@ -42,6 +42,9 @@ resources:
 serviceAccount:
   create: true
   name: control-plane
+  # EKS IRSA example (uncomment and set role ARN when using AWS Cost Explorer from the pod):
+  # annotations:
+  #   eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/control-plane-cost
 
 rbac:
   create: true
@@ -58,3 +61,19 @@ secrets:
 # Optional: pin namespace on every manifest (must match Argo Application destination.namespace).
 # Leave empty to use .Release.Namespace when the Helm engine sets it.
 targetNamespace: ""
+
+budgets:
+  enabled: true
+  # If non-empty, replaces budgets.default.yaml (use |- multiline string in Argo Helm values).
+  definition: ""
+
+cost:
+  # Optional OpenCost base URL, e.g. http://opencost.opencost.svc.cluster.local:9003
+  opencostBaseUrl: ""
+  # Set "true" on EKS with IRSA (see docs/iam-control-plane-cost-explorer.json + serviceAccount.annotations).
+  awsCostExplorerEnabled: "false"
+  awsRegion: us-east-1
+  # EC2 reference type for declared-cost estimates (see aws-pricing.ts NODE_TYPE_DEFAULTS). Ignored if cost.pricingJson is set.
+  nodeInstanceType: m6i.large
+  # Optional override for declare-based estimates: { "usdPerCpuCoreMonth": 35, "usdPerGiBMonth": 8.76 }
+  pricingJson: null

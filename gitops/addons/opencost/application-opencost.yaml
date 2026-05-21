@@ -1,0 +1,27 @@
+# Optional: uncomment and tune when OpenCost should be managed by Argo CD.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: opencost
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: opencost
+    repoURL: https://opencost.github.io/opencost-helm-chart
+    targetRevision: 1.33.1
+    helm:
+      releaseName: opencost
+      values: |
+        prometheus:
+          internal:
+            enabled: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: opencost
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

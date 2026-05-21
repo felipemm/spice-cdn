@@ -9,6 +9,8 @@ export default function AdminPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [costs, setCosts] = useState<string>("");
+
   const headers = useCallback(() => {
     const h: Record<string, string> = {};
     if (key) h["x-admin-key"] = key;
@@ -23,6 +25,21 @@ export default function AdminPage() {
       const text = await res.text();
       if (!res.ok) throw new Error(text);
       setSummary(JSON.stringify(JSON.parse(text), null, 2));
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  }, [headers]);
+
+  const loadCosts = useCallback(async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/admin/costs", { headers: headers() });
+      const text = await res.text();
+      if (!res.ok) throw new Error(text);
+      setCosts(JSON.stringify(JSON.parse(text), null, 2));
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -79,6 +96,14 @@ export default function AdminPage() {
         >
           Load stack summary
         </button>
+        <button
+          type="button"
+          onClick={() => void loadCosts()}
+          disabled={busy}
+          className="rounded border border-amber-600 px-3 py-2 text-sm text-amber-100 hover:bg-neutral-900 disabled:opacity-50"
+        >
+          Load cost summary
+        </button>
       </div>
       <div className="flex flex-wrap items-end gap-3">
         <div>
@@ -107,8 +132,13 @@ export default function AdminPage() {
         </button>
       </div>
       {msg && <p className="text-sm text-neutral-300">{msg}</p>}
-      <pre className="max-h-[600px] overflow-auto rounded border border-neutral-800 bg-neutral-900 p-3 text-xs text-neutral-200">
+      <h2 className="text-lg font-medium text-neutral-200">Stack</h2>
+      <pre className="max-h-[480px] overflow-auto rounded border border-neutral-800 bg-neutral-900 p-3 text-xs text-neutral-200">
         {summary || "// summary appears here"}
+      </pre>
+      <h2 className="text-lg font-medium text-neutral-200">Costs (Git + live pods + optional OpenCost / AWS CE)</h2>
+      <pre className="max-h-[480px] overflow-auto rounded border border-neutral-800 bg-neutral-900 p-3 text-xs text-neutral-200">
+        {costs || "// use Load cost summary"}
       </pre>
     </div>
   );

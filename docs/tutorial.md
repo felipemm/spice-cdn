@@ -344,9 +344,9 @@ Expect: **`control-plane`** `Application` is **Synced** / **Healthy** (may take 
 After the ingress is reachable:
 
 1. Open `https://<your-control-plane-host>/` (or `http://` if you terminate TLS elsewhere).
-2. **Instances**: create, edit `values.yaml`, delete — all commits go to GitHub under `instances/<name>/values.yaml`.
+2. **Instances**: each instance must include **`ownerLayerSlug`** and matching **`spiceai.additionalLabels["owner-layer-slug"]`** in `instances/<name>/values.yaml` (the **New instance** form sets both). Argo deploys the [`charts/spice-instance`](../charts/spice-instance) chart, which requires `ownerLayerSlug` and labels Spice pods for cost attribution.
 3. **Secrets**: the **Vault** panel writes KV to `spice/instances/<name>`; the chart’s `ExternalSecret` syncs into the Kubernetes `Secret` referenced by Spice `additionalEnv` (see [Spice Helm env pattern](https://spiceai.org/docs/deployment/kubernetes)).
-4. **Admin** (`/admin`): paste `ADMIN_API_KEY` to load stack summary (Argo Applications, ESO resources, Vault health, pod snapshots). Use **Sync** / **Refresh** on an Argo `Application` name (for example `spice-example`) without opening the Argo UI.
+4. **Admin** (`/admin`): paste `ADMIN_API_KEY` to load stack summary (Argo Applications, ESO resources, Vault health, pod snapshots) and **Load cost summary** (Git-declared estimates, live pods with `owner-layer-slug`, optional OpenCost + AWS Cost Explorer). Use **Sync** / **Refresh** on an Argo `Application` name (for example `spice-example`) without opening the Argo UI.
 
 **Validate (through ingress, same host as `ingress.host` in chart values):**
 
@@ -357,6 +357,15 @@ curl -sfI "http://${CP_HOST}/" | head -5
 ```
 
 Expect: JSON **`{"ok":true,...}`** from `/api/health`, and **`HTTP/1.1`** from `/` (**`200`** or a Next.js redirect — not connection refused). Set **`CP_HOST`** to match your `deploy/helm/control-plane/values.yaml` `ingress.host` if you changed it.
+
+### Cost governance (Kind as EKS)
+
+- **Budgets**: defaults and per-slug caps live in [`deploy/helm/control-plane/budgets.default.yaml`](../deploy/helm/control-plane/budgets.default.yaml) (mounted into the pod as `/config/budgets.yaml`). Mirror for docs in [`gitops/cost/budgets.yaml`](../gitops/cost/budgets.yaml). Tune `maxInstancesPerSlug` / optional `maxEstimatedMonthlyUsdPerSlug`, sync the `control-plane` app, and restart if needed.
+- **Declared cost estimates**: the control plane uses configurable **vCPU / GiB-month** factors. Set `cost.pricingJson` for explicit numbers, or **`cost.nodeInstanceType`** (Helm → **`COST_NODE_INSTANCE_TYPE`**) to pick a built-in EC2 reference (see `apps/control-plane/src/lib/aws-pricing.ts`). **`AWS_REGION`** is echoed in the cost summary for “Kind as EKS” alignment with Cost Explorer.
+- **OpenCost** (optional): install per [`gitops/addons/opencost/README.md`](../gitops/addons/opencost/README.md), then set `cost.opencostBaseUrl` on the control-plane chart (for example `http://opencost.opencost.svc.cluster.local:9003`).
+- **AWS Cost Explorer** (optional, EKS): attach an IAM role to the control-plane `ServiceAccount` (**IRSA**) using [`docs/iam-control-plane-cost-explorer.json`](../docs/iam-control-plane-cost-explorer.json), set `serviceAccount.annotations.eks.amazonaws.com/role-arn`, and set `cost.awsCostExplorerEnabled: "true"`. The API returns **account-level** last-30d unblended cost (not per slug).
+- **Kyverno** (optional admission): after [Kyverno](https://kyverno.io/) is installed, apply [`gitops/bootstrap/manifests/kyverno-require-owner-layer-slug.yaml`](../gitops/bootstrap/manifests/kyverno-require-owner-layer-slug.yaml) so Pods in **`spice-instances`** must carry label **`owner-layer-slug`**.
+- **CI**: PRs touching `gitops/instances/**/values.yaml` run [`.github/workflows/validate-instances.yml`](../.github/workflows/validate-instances.yml) (`helm template` per instance).
 
 ### Troubleshooting
 
