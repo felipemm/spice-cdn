@@ -3,6 +3,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ .Release.Name }}
+  namespace: {{ include "control-plane.namespace" . }}
   labels:
     app.kubernetes.io/name: control-plane
   {{- with .Values.ingress.annotations }}

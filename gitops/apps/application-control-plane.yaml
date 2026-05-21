@@ -17,6 +17,7 @@ spec:
     targetRevision: HEAD
     path: deploy/helm/control-plane
     helm:
+      releaseName: control-plane
       valueFiles:
         - values.yaml
   syncPolicy:

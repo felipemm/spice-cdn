@@ -197,7 +197,7 @@ After the ingress is reachable:
 | Vault read/write errors | `VAULT_TOKEN` in the control-plane Secret, KV v2 mount path, and Vault policies allowing the token to read/write `spice/instances/*`. |
 | ExternalSecret not syncing | `ClusterSecretStore` status, `vault-eso-token` Secret, and `externalSecret.vaultPath` in instance `values.yaml`. |
 | `no matches for kind "ClusterSecretStore"` | External Secrets **CRDs not installed** yet: finish step 4, run `kubectl get crd clustersecretstores.external-secrets.io`, wait for `external-secrets` Deployment ready, then re-apply the manifest. |
-| Image not updating | Rebuild, `kind load docker-image`, and restart the control-plane Deployment (or bump image tag in Helm values). |
+| `Resource not found in cluster: v1/Service:control-plane` | Namespaced objects were applied to **`default`** while Argo tracks **`control-plane`**. This chart now pins `metadata.namespace` (see `deploy/helm/control-plane/templates/_helpers.tpl`). Commit/push, **Refresh + Sync** the `control-plane` Application; remove stray `Service`/`Deployment` in `default` if they exist (check with `kubectl get svc,deploy -n default`). |
 
 ---
 

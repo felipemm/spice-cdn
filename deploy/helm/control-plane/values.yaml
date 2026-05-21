@@ -49,3 +49,7 @@ secrets:
   vaultTokenSecretKey: vault_token
   adminApiKeySecretName: control-plane-secrets
   adminApiKeySecretKey: admin_api_key
+
+# Optional: pin namespace on every manifest (must match Argo Application destination.namespace).
+# Leave empty to use .Release.Namespace when the Helm engine sets it.
+targetNamespace: ""

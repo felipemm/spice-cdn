@@ -28,5 +28,5 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: {{ .Values.serviceAccount.name }}
-    namespace: {{ .Release.Namespace }}
+    namespace: {{ include "control-plane.namespace" . }}
 {{- end }}
