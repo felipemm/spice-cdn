@@ -20,8 +20,8 @@ env:
   githubOwner: felipemm
   githubRepo: spice-cdn
   githubBranch: main
-  # Vault address inside the cluster
-  vaultAddr: http://vault-0.vault.svc.cluster.local:8200
+  # Vault address inside the cluster (Service DNS for the Helm release; not the StatefulSet pod name).
+  vaultAddr: http://vault.vault.svc.cluster.local:8200
   vaultRole: control-plane
   # Argo CD namespace (for Kubernetes API reads / sync patches)
   argocdNamespace: argocd
