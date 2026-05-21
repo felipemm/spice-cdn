@@ -1,0 +1,24 @@
+# Apply ONCE after editing repo URLs to match your GitHub repository.
+# This "app of apps" syncs the manifests under `gitops/apps/` (but not this file).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-gitops
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  source:
+    repoURL: https://github.com/felipemm/spice-cdn.git
+    targetRevision: HEAD
+    path: gitops/apps
+    directory:
+      include: "*.yaml"
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

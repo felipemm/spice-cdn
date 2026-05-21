@@ -1,0 +1,14 @@
+controller:
+  service:
+    type: NodePort
+  hostPort:
+    enabled: false
+  publishService:
+    enabled: true
+  watchIngressWithoutClass: true
+  ingressClassResource:
+    name: nginx
+    enabled: true
+    default: true
+  admissionWebhooks:
+    enabled: false

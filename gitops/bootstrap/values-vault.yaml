@@ -1,0 +1,19 @@
+# LAB / KIND ONLY — Vault in standalone dev-style mode. Do not use these defaults in production.
+server:
+  enabled: true
+  dev:
+    enabled: true
+  standalone:
+    enabled: false
+  dataStorage:
+    enabled: false
+  service:
+    enabled: true
+    type: ClusterIP
+  affinity: {}
+  ha:
+    enabled: false
+injector:
+  enabled: false
+ui:
+  enabled: false

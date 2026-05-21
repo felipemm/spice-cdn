@@ -1,0 +1,5 @@
+1. Ensure the `control-plane-secrets` Secret exists in namespace `{{ .Release.Namespace }}` with keys `github_token`, `vault_token`, and `admin_api_key`.
+
+2. Open the UI at your ingress host (see `ingress.host` in values).
+
+3. Use `/admin` with the configured admin API key to monitor Argo CD, External Secrets, Vault, and core pods.

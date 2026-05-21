@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app.kubernetes.io/name: control-plane
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: control-plane
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: control-plane
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      containers:
+        - name: web
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: GITHUB_OWNER
+              value: {{ .Values.env.githubOwner | quote }}
+            - name: GITHUB_REPO
+              value: {{ .Values.env.githubRepo | quote }}
+            - name: GITHUB_BRANCH
+              value: {{ .Values.env.githubBranch | quote }}
+            - name: VAULT_ADDR
+              value: {{ .Values.env.vaultAddr | quote }}
+            - name: VAULT_ROLE
+              value: {{ .Values.env.vaultRole | quote }}
+            - name: ARGOCD_NAMESPACE
+              value: {{ .Values.env.argocdNamespace | quote }}
+            - name: SPICE_NAMESPACE
+              value: {{ .Values.env.spiceNamespace | quote }}
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.githubTokenSecretName }}
+                  key: {{ .Values.secrets.githubTokenSecretKey }}
+            - name: VAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.vaultTokenSecretName }}
+                  key: {{ .Values.secrets.vaultTokenSecretKey }}
+            - name: ADMIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.adminApiKeySecretName }}
+                  key: {{ .Values.secrets.adminApiKeySecretKey }}
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

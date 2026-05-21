@@ -1,0 +1,51 @@
+replicaCount: 1
+
+image:
+  repository: spice-control-plane
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3000
+
+ingress:
+  enabled: true
+  className: nginx
+  host: control-plane.127.0.0.1.nip.io
+  annotations: {}
+
+env:
+  # GitHub repository backing GitOps (same values Argo uses)
+  githubOwner: CHANGE_ME_ORG
+  githubRepo: CHANGE_ME_REPO
+  githubBranch: main
+  # Vault address inside the cluster
+  vaultAddr: http://vault.vault.svc.cluster.local:8200
+  vaultRole: control-plane
+  # Argo CD namespace (for Kubernetes API reads / sync patches)
+  argocdNamespace: argocd
+  spiceNamespace: spice-instances
+
+resources:
+  limits:
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+serviceAccount:
+  create: true
+  name: control-plane
+
+rbac:
+  create: true
+
+secrets:
+  # Reference existing Secret keys mounted into the pod (do not commit real values).
+  githubTokenSecretName: control-plane-secrets
+  githubTokenSecretKey: github_token
+  vaultTokenSecretName: control-plane-secrets
+  vaultTokenSecretKey: vault_token
+  adminApiKeySecretName: control-plane-secrets
+  adminApiKeySecretKey: admin_api_key

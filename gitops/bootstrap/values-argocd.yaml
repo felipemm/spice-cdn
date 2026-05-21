@@ -1,0 +1,30 @@
+# Argo CD Helm values (reference). Pin chart version in tutorial/Makefile when installing.
+configs:
+  params:
+    # In labs you may temporarily enable insecure; prefer TLS + proper ingress in real envs.
+    server.insecure: true
+server:
+  extraArgs:
+    - --insecure
+  ingress:
+    enabled: false
+  resources:
+    limits:
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+controller:
+  resources:
+    limits:
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+repoServer:
+  resources:
+    limits:
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi

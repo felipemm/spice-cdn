@@ -1,0 +1,40 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: spice-instances
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  goTemplate: true
+  generators:
+    - git:
+        repoURL: https://github.com/felipemm/spice-cdn.git
+        revision: HEAD
+        directories:
+          - path: instances/*
+  template:
+    metadata:
+      name: "spice-{{.path.basename}}"
+      labels:
+        spice.dataviz/instance: "{{.path.basename}}"
+    spec:
+      project: spice-platform
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: spice-instances
+      source:
+        repoURL: https://github.com/felipemm/spice-cdn.git
+        targetRevision: HEAD
+        path: charts/spice-instance
+        helm:
+          releaseName: "{{.path.basename}}"
+          valueFiles:
+            - "../../instances/{{.path.basename}}/values.yaml"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: spice-platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Spice GitOps platform (instances + control plane)
+  sourceRepos:
+    - "https://helm.spiceai.org"
+    - "https://github.com/CHANGE_ME_ORG/CHANGE_ME_REPO.git"
+  destinations:
+    - namespace: spice-instances
+      server: https://kubernetes.default.svc
+    - namespace: control-plane
+      server: https://kubernetes.default.svc
+    - namespace: argocd
+      server: https://kubernetes.default.svc
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace

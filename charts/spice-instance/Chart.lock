@@ -1,0 +1,6 @@
+dependencies:
+  - name: spiceai
+    repository: https://helm.spiceai.org
+    version: 1.11.6
+digest: sha256:d4ce74ce6ff17463ff3efb8c5b2ed0b6b7cd14794711b2274c5ef9f1c5b28aac
+generated: "2026-05-20T00:00:00Z"

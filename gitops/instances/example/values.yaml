@@ -1,0 +1,28 @@
+# Example instance (safe defaults). Replace ingress.host with a hostname that resolves to your Kind ingress.
+ingress:
+  enabled: true
+  className: nginx
+  host: spice-example.127.0.0.1.nip.io
+
+externalSecret:
+  enabled: true
+  clusterSecretStoreName: vault-backend
+  vaultPath: spice/instances/example
+  targetSecretName: spice-example-env
+  refreshInterval: 1m
+
+spiceai:
+  spicepod:
+    name: example
+    version: v1
+    kind: Spicepod
+    datasets: []
+  additionalEnv: []
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi

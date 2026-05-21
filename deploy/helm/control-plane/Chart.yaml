@@ -1,0 +1,6 @@
+apiVersion: v2
+name: control-plane
+description: Next.js Spice GitOps control plane
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

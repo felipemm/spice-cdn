@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: control-plane
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: spice-platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: control-plane
+  source:
+    repoURL: https://github.com/felipemm/spice-cdn.git
+    targetRevision: HEAD
+    path: deploy/helm/control-plane
+    helm:
+      valueFiles:
+        - values.yaml
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
