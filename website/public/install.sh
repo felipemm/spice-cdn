@@ -19,25 +19,128 @@ else
 fi
 unset __install_src
 
+# Trim whitespace/CR and stray commas (bad CI embeds, CSV copy-paste, fragile JSON parsing).
+normalize_shell_token() {
+  local s="${1-}"
+  s="${s#"${s%%[![:space:]]*}"}"
+  s="${s%"${s##*[![:space:]]}"}"
+  s="${s//$'\r'/}"
+  while [[ "${s}" == ,* ]]; do s="${s#,}"; done
+  while [[ "${s}" == *, ]]; do s="${s%,}"; done
+  printf '%s' "${s}"
+}
+
 # Injected when copied into a release tarball (see .github/workflows/release.yml).
-SPICE_PACKAGED_RELEASE="v0.1.0"
+SPICE_PACKAGED_RELEASE=""
 
 SPICE_PRODUCT_REPO="${SPICE_PRODUCT_REPO:-felipemm/spice-cdn}"
+SPICE_PRODUCT_REPO="$(normalize_shell_token "${SPICE_PRODUCT_REPO}")"
 SPICE_GITOPS_DIR="${SPICE_GITOPS_DIR:-}"
 CLUSTER_NAME="${CLUSTER_NAME:-spice-gitops}"
 STATE_DIR="${STATE_DIR:-"$HOME/.spice-platform"}"
+# Local lab (no --gitops-repo): Helm Gitea in-cluster + ingress UI; Argo clones over HTTP inside the cluster.
+SPICE_GITEA_NAMESPACE="${SPICE_GITEA_NAMESPACE:-gitea}"
+SPICE_GITEA_RELEASE="${SPICE_GITEA_RELEASE:-gitea}"
+SPICE_GITEA_REPO_NAME="${SPICE_GITEA_REPO_NAME:-gitops}"
+SPICE_GITEA_ADMIN_USER="${SPICE_GITEA_ADMIN_USER:-spice-admin}"
+SPICE_GITEA_INGRESS_HOST="${SPICE_GITEA_INGRESS_HOST:-gitea.127.0.0.1.nip.io}"
+
+gitea_internal_http_clone_url() {
+  printf 'http://%s-http.%s.svc.cluster.local:3000/%s/%s.git' \
+    "${SPICE_GITEA_RELEASE}" "${SPICE_GITEA_NAMESPACE}" \
+    "${SPICE_GITEA_ADMIN_USER}" "${SPICE_GITEA_REPO_NAME}"
+}
+
+gitea_web_url() {
+  printf 'http://%s/' "${SPICE_GITEA_INGRESS_HOST}"
+}
+
+install_gitea_chart() {
+  local bundle_root="$1"
+  local admin_pass="$2"
+  local vf=""
+  if [[ -f "${bundle_root}/templates/gitops/bootstrap/values-gitea.yaml" ]]; then
+    vf="${bundle_root}/templates/gitops/bootstrap/values-gitea.yaml"
+  elif [[ -f "${bundle_root}/bootstrap/values-gitea.yaml" ]]; then
+    vf="${bundle_root}/bootstrap/values-gitea.yaml"
+  elif [[ -f "${REPO_ROOT}/templates/gitops/bootstrap/values-gitea.yaml" ]]; then
+    vf="${REPO_ROOT}/templates/gitops/bootstrap/values-gitea.yaml"
+  fi
+  [[ -f "${vf}" ]] || die "missing templates/gitops/bootstrap/values-gitea.yaml"
+  helm repo add gitea-charts https://dl.gitea.com/charts/ 2>/dev/null || true
+  helm repo update gitea-charts
+  umask 077
+  local secretf="${STATE_DIR}/gitea-admin-secret-values.yaml"
+  cat >"${secretf}" <<EOF
+gitea:
+  admin:
+    username: ${SPICE_GITEA_ADMIN_USER}
+    password: ${admin_pass}
+EOF
+  local ver=()
+  [[ -n "${GITEA_CHART_VERSION:-}" ]] && ver=(--version "${GITEA_CHART_VERSION}")
+  helm upgrade --install "${SPICE_GITEA_RELEASE}" gitea-charts/gitea \
+    -n "${SPICE_GITEA_NAMESPACE}" --create-namespace \
+    "${ver[@]}" \
+    -f "${vf}" -f "${secretf}"
+  kubectl -n "${SPICE_GITEA_NAMESPACE}" rollout status "deploy/${SPICE_GITEA_RELEASE}" --timeout=600s
+}
+
+gitea_wait_api() {
+  local port="$1"
+  local i
+  for i in $(seq 1 60); do
+    if curl -sf "http://127.0.0.1:${port}/api/v1/version" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  die "Gitea API did not become ready on port ${port}"
+}
+
+gitea_create_empty_repo() {
+  local admin_pass="$1"
+  local port="$2"
+  curl -sS -u "${SPICE_GITEA_ADMIN_USER}:${admin_pass}" \
+    -H "Content-Type: application/json" \
+    -X POST "http://127.0.0.1:${port}/api/v1/user/repos" \
+    -d "{\"name\":\"${SPICE_GITEA_REPO_NAME}\",\"private\":false,\"auto_init\":false,\"default_branch\":\"main\"}" \
+    >/dev/null || true
+}
+
+gitea_push_materialized_workdir() {
+  local work="$1"
+  local admin_pass="$2"
+  local port="$3"
+  command -v git >/dev/null 2>&1 || die "local Gitea mode requires git in PATH"
+  rm -rf "${work}/.git"
+  git -C "${work}" init -b main
+  git -C "${work}" config user.email "spice-local@invalid"
+  git -C "${work}" config user.name "spice-local"
+  git -C "${work}" add -A
+  git -C "${work}" commit -m "bootstrap" || true
+  git -C "${work}" remote remove origin 2>/dev/null || true
+  git -C "${work}" remote add origin "http://${SPICE_GITEA_ADMIN_USER}:${admin_pass}@127.0.0.1:${port}/${SPICE_GITEA_ADMIN_USER}/${SPICE_GITEA_REPO_NAME}.git"
+  git -C "${work}" push -u origin main --force
+}
+
+fetch_latest_github_release_tag() {
+  command -v curl >/dev/null 2>&1 || return 1
+  curl -fsSL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} \
+    -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/${SPICE_PRODUCT_REPO}/releases/latest" 2>/dev/null \
+    | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+}
 
 # Piped install without an embedded tag: default to latest GitHub Release of the product repo (avoids 0.0.0-dev).
 if [[ "${INSTALL_FROM_PIPE}" -eq 1 ]] && [[ -z "${SPICE_PACKAGED_RELEASE}" ]] && [[ -z "${SPICE_RELEASE:-}" ]]; then
-  if command -v curl >/dev/null 2>&1; then
-    _rel="$(curl -fsSL \
-      -H "Accept: application/vnd.github+json" \
-      "https://api.github.com/repos/${SPICE_PRODUCT_REPO}/releases/latest" 2>/dev/null \
-      | sed -n 's/^  "tag_name": "\(.*\)"/\1/p' | head -1)" || true
-    if [[ -n "${_rel}" ]]; then
-      SPICE_PACKAGED_RELEASE="${_rel}"
-    fi
+  _rel="$(fetch_latest_github_release_tag)" || true
+  if [[ -n "${_rel}" ]]; then
+    SPICE_PACKAGED_RELEASE="$(normalize_shell_token "${_rel}")"
   fi
+fi
+if [[ -n "${SPICE_PACKAGED_RELEASE:-}" ]]; then
+  SPICE_PACKAGED_RELEASE="$(normalize_shell_token "${SPICE_PACKAGED_RELEASE}")"
 fi
 unset _rel 2>/dev/null || true
 
@@ -47,19 +150,30 @@ Usage:
   install.sh [options]
 
 Options:
-  --gitops-repo URL     HTTPS Git URL of your GitOps repo (must end with .git), e.g. https://github.com/org/spice-gitops.git
-  --revision BRANCH     Argo targetRevision / git revision (default: main)
-  --release VERSION     Platform version tag (default: packaged release or 0.0.0-dev for local tree)
-  --materialize DIR     Only render templates into DIR and exit (no cluster changes)
-  --upgrade             Check GitHub for newer release than state file and re-materialize (see docs)
-  --uninstall --all     kind delete cluster (CLUSTER_NAME)
-  --yes                 Skip confirmation prompts (dangerous with --uninstall)
+  --gitops-repo URL     Remote GitOps repo (HTTPS, must end with .git). Omit for a local-only Kind lab.
+  --gitops-pat TOKEN    PAT for Argo + control plane (remote repos; use for private GitHub repos).
+  --revision BRANCH     Argo targetRevision (default: main)
+  --release VERSION     Platform version tag (default: packaged release or latest from API)
+  --materialize DIR     Only render templates into DIR and exit (no cluster)
+  --upgrade             Re-materialize from latest product release (remote GitOps only; see state file)
+  --uninstall --all     Delete the Kind cluster (CLUSTER_NAME)
+  --yes                 Answer yes to confirmation prompts (recommended for uninstall when piping)
 
-Env:
-  SPICE_RELEASE         Same as --release
-  SPICE_GITOPS_DIR      Output / materialized GitOps tree (default: ./spice-gitops-work)
-  SPICE_PRODUCT_REPO     GitHub owner/repo for downloads (default: felipemm/spice-cdn)
-  GITHUB_TOKEN          Optional; for upgrade API or private release assets
+Defaults:
+  Unset GITOPS_REPO_URL → local Kind lab: Gitea in-cluster (HTTP for Argo), ingress UI at
+  http://gitea.127.0.0.1.nip.io/ ; materialized tree is pushed once to Gitea (admin password = Argo repo secret).
+  Piped installs (no TTY) default --yes for bootstrap steps so you are not asked to type confirmations.
+
+Optional overrides (environment):
+  SPICE_RELEASE, SPICE_GITOPS_DIR, SPICE_PRODUCT_REPO, CLUSTER_NAME, STATE_DIR
+  GITOPS_REPO_URL, GITOPS_PAT, GITOPS_TARGET_REVISION, GITHUB_TOKEN
+  SPICE_GITEA_NAMESPACE, SPICE_GITEA_RELEASE, SPICE_GITEA_REPO_NAME, SPICE_GITEA_ADMIN_USER, SPICE_GITEA_INGRESS_HOST
+  SPICE_DISABLE_LOCAL_GITOPS=1  Require --gitops-repo (fail if URL empty)
+
+Examples:
+  install.sh
+  install.sh --gitops-repo https://github.com/org/spice-gitops.git --gitops-pat "$TOKEN"
+  curl -fsSL …/install.sh | bash -s -- --gitops-repo https://github.com/org/gitops.git --gitops-pat "$TOKEN"
 USAGE
 }
 
@@ -68,28 +182,21 @@ die() {
   exit 1
 }
 
-prompt() {
-  local var="$1"
-  local msg="$2"
-  if [[ -n "${!var:-}" ]]; then
-    return 0
-  fi
-  local val
-  read -r -p "${msg} " val || true
-  printf -v "${var}" '%s' "${val}"
-}
-
 confirm() {
   [[ "${YES:-0}" == "1" ]] && return 0
+  if [[ ! -t 0 ]] || [[ "${NONINTERACTIVE:-0}" == "1" ]] || [[ "${CI:-}" == "1" ]] || [[ "${CI:-}" == "true" ]]; then
+    return 1
+  fi
   local ans
   read -r -p "$* [y/N] " ans || true
   [[ "${ans}" == "y" || "${ans}" == "Y" ]]
 }
 
 effective_release() {
-  local v="${SPICE_RELEASE:-}"
-  if [[ -z "${v}" && -n "${SPICE_PACKAGED_RELEASE}" ]]; then
-    v="${SPICE_PACKAGED_RELEASE}"
+  local v
+  v="$(normalize_shell_token "${SPICE_RELEASE:-}")"
+  if [[ -z "${v}" ]]; then
+    v="$(normalize_shell_token "${SPICE_PACKAGED_RELEASE:-}")"
   fi
   if [[ -z "${v}" ]]; then
     v="0.0.0-dev"
@@ -108,7 +215,7 @@ download_release() {
   mkdir -p "${dest}"
   echo "Downloading ${url}" >&2
   if ! curl -fsSL -o "${dest}/bundle.tgz" "${url}"; then
-    die "failed to download release ${ver}. Set SPICE_PRODUCT_REPO or create a GitHub Release with spice-platform-${ver}.tar.gz"
+    die "failed to download release ${ver}. Check --release / SPICE_PRODUCT_REPO or that ${url} exists."
   fi
   tar -xzf "${dest}/bundle.tgz" -C "${dest}"
   # Expect spice-platform-${ver}/...
@@ -126,7 +233,7 @@ resolve_bundle_root() {
   rm -rf "${tmp}"
   mkdir -p "${tmp}"
   if [[ "${ver}" == "0.0.0-dev" ]]; then
-    die "Release ${ver} requires a git checkout with templates/gitops (clone the product repo) or set SPICE_RELEASE to a published tag."
+    die "Release ${ver} requires a git checkout with templates/gitops (clone the product repo) or pass --release with a published tag."
   fi
   download_release "${ver}" "${tmp}"
 }
@@ -149,10 +256,27 @@ materialize_tree() {
     die "bundle missing templates/gitops (or legacy gitops/) under ${bundle_root}"
   fi
 
-  local go="${gitops_url#https://github.com/}"
-  go="${go%.git}"
-  local g_owner="${go%%/*}"
-  local g_name="${go##*/}"
+  local g_owner="local"
+  local g_name="spice-platform"
+  if [[ "${gitops_url}" != git://* ]]; then
+    local authpath="${gitops_url#*://}"
+    if [[ "${authpath}" == */* ]]; then
+      local hp="${authpath%%/*}"
+      local rest="${authpath#"${hp}"/}"
+      rest="${rest%.git}"
+      if [[ "${rest}" == */* ]]; then
+        g_owner="${rest%%/*}"
+        g_name="${rest##*/}"
+      fi
+    fi
+  fi
+
+  local app_insecure="" appset_git="" appset_src=""
+  if [[ "${gitops_url}" == http://* ]]; then
+    app_insecure='    insecure: true'
+    appset_git='        insecure: true'
+    appset_src='        insecure: true'
+  fi
 
   cp -R "${tpl_dir}/apps" "${out}/apps"
   cp -R "${tpl_dir}/bootstrap" "${out}/bootstrap"
@@ -174,6 +298,9 @@ materialize_tree() {
       -e "s|__GITOPS_REPO_HTTPS_URL__|${gitops_url}|g" \
       -e "s|__GITOPS_TARGET_REVISION__|${revision}|g" \
       -e "s|__PLATFORM_RELEASE__|${platform_ver}|g" \
+      -e "s|__GITOPS_APP_INSECURE__|${app_insecure}|g" \
+      -e "s|__GITOPS_APPSET_GIT_INSECURE__|${appset_git}|g" \
+      -e "s|__GITOPS_APPSET_SRC_INSECURE__|${appset_src}|g" \
       "${f}" >"${f}.tmp" && mv "${f}.tmp" "${f}"
   done < <(find "${out}" -type f -print0 2>/dev/null)
 
@@ -191,7 +318,16 @@ materialize_tree() {
 
 helm_bootstrap() {
   local root="$1"
-  local b="${root}/bootstrap"
+  local b=""
+  if [[ -d "${root}/bootstrap" ]]; then
+    b="${root}/bootstrap"
+  elif [[ -d "${root}/templates/gitops/bootstrap" ]]; then
+    b="${root}/templates/gitops/bootstrap"
+  elif [[ -d "${root}/gitops/bootstrap" ]]; then
+    b="${root}/gitops/bootstrap"
+  else
+    die "no bootstrap Helm values under ${root} (expected bootstrap/ or templates/gitops/bootstrap/)"
+  fi
   helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx 2>/dev/null || true
   helm repo add hashicorp https://helm.releases.hashicorp.com 2>/dev/null || true
   helm repo add external-secrets https://charts.external-secrets.io 2>/dev/null || true
@@ -220,12 +356,25 @@ vault_eso_token() {
 apply_argo_repo_secret() {
   local gitops_url="$1"
   local pat="$2"
+  local repo_user="${3:-git}"
   kubectl -n argocd delete secret github-gitops --ignore-not-found
+  if [[ "${gitops_url}" == git://* ]]; then
+    kubectl -n argocd create secret generic github-gitops \
+      --from-literal=type=git \
+      --from-literal=url="${gitops_url}"
+    kubectl -n argocd label secret github-gitops argocd.argoproj.io/secret-type=repository --overwrite
+    return 0
+  fi
+  local insecure=()
+  if [[ "${gitops_url}" == http://* ]]; then
+    insecure=(--from-literal=insecure=true)
+  fi
   kubectl -n argocd create secret generic github-gitops \
     --from-literal=type=git \
     --from-literal=url="${gitops_url}" \
-    --from-literal=username=git \
-    --from-literal=password="${pat}"
+    --from-literal=username="${repo_user}" \
+    --from-literal=password="${pat}" \
+    "${insecure[@]}"
   kubectl -n argocd label secret github-gitops argocd.argoproj.io/secret-type=repository --overwrite
 }
 
@@ -250,17 +399,37 @@ apply_root_app() {
 write_state() {
   mkdir -p "${STATE_DIR}"
   umask 077
+  local gitea_ui=""
+  [[ "${SPICE_LOCAL_CLUSTER_MODE:-0}" -eq 1 ]] && gitea_ui="$(gitea_web_url)"
   cat >"${STATE_DIR}/install.env" <<EOF
 CLUSTER_NAME=${CLUSTER_NAME}
-GITOPS_REPO_URL=${GITOPS_REPO_URL}
+GITOPS_REPO_URL=${GITOPS_REPO_URL:-}
+SPICE_LOCAL_CLUSTER_MODE=${SPICE_LOCAL_CLUSTER_MODE:-0}
+SPICE_GIT_EFFECTIVE_REPO_URL=${SPICE_GIT_EFFECTIVE_REPO_URL:-}
+GITEA_UI_URL=${gitea_ui}
 PLATFORM_RELEASE=$(effective_release)
 MATERIALIZED_PATH=${SPICE_GITOPS_DIR}
 EOF
+  if [[ "${SPICE_LOCAL_CLUSTER_MODE:-0}" -eq 1 ]]; then
+    {
+      printf '%s\n' "# Local lab — Gitea admin login and Argo Git credential (same password)."
+      printf 'GITEA_UI_URL=%s\n' "${gitea_ui}"
+      printf 'GITEA_USERNAME=%s\n' "${SPICE_GITEA_ADMIN_USER}"
+      printf 'GITEA_PASSWORD=%s\n' "${GITOPS_PAT}"
+      printf 'IN_CLUSTER_REPO_URL=%s\n' "${SPICE_GIT_EFFECTIVE_REPO_URL}"
+    } >"${STATE_DIR}/gitea-local-credentials.txt"
+    chmod 600 "${STATE_DIR}/gitea-local-credentials.txt" 2>/dev/null || true
+  else
+    rm -f "${STATE_DIR}/gitea-local-credentials.txt" 2>/dev/null || true
+  fi
 }
 
 do_uninstall() {
   if ! confirm "Delete Kind cluster '${CLUSTER_NAME}'?"; then
-    echo "Aborted."
+    echo "Skipping cluster delete." >&2
+    if [[ ! -t 0 ]] && [[ "${YES:-0}" != "1" ]]; then
+      echo "Re-run with: install.sh --uninstall --all --yes" >&2
+    fi
     exit 0
   fi
   kind delete cluster --name "${CLUSTER_NAME}" || true
@@ -287,20 +456,25 @@ do_upgrade() {
     source "${STATE_DIR}/install.env"
     current="${PLATFORM_RELEASE:-0.0.0}"
   fi
+  [[ "${SPICE_LOCAL_CLUSTER_MODE:-0}" != "1" ]] || die "--upgrade is for remote GitOps only (install once with --gitops-repo, or re-materialize manually)."
+  [[ -n "${GITOPS_REPO_URL:-}" ]] || die "--upgrade needs a saved remote GitOps URL in ${STATE_DIR}/install.env (local-only installs do not support --upgrade)."
   api="https://api.github.com/repos/${SPICE_PRODUCT_REPO}/releases/latest"
   echo "Checking ${api}"
-  latest="$(curl -fsSL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} "${api}" | sed -n 's/^  "tag_name": "\(.*\)"/\1/p' | head -1)"
-  [[ -n "${latest}" ]] || die "could not determine latest release (set GITHUB_TOKEN for private repos)"
+  latest="$(curl -fsSL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} \
+    -H "Accept: application/vnd.github+json" \
+    "${api}" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+  latest="$(normalize_shell_token "${latest}")"
+  [[ -n "${latest}" ]] || die "could not determine latest release (private product repo: provide GITHUB_TOKEN in CI or your shell)"
   echo "Current: ${current}  Latest: ${latest}"
   if ! semver_gt "${latest}" "${current}"; then
     echo "No upgrade needed (or semver compare inconclusive)."
     exit 0
   fi
-  if ! confirm "Re-materialize GitOps tree at SPICE_GITOPS_DIR using ${latest}?"; then
+  local out="${MATERIALIZED_PATH:-${SPICE_GITOPS_DIR:-$(pwd)/spice-gitops-work}}"
+  if ! confirm "Re-materialize GitOps tree at ${out} using ${latest}?"; then
+    echo "Upgrade cancelled." >&2
     exit 0
   fi
-  local out="${SPICE_GITOPS_DIR:-$(pwd)/spice-gitops-work}"
-  [[ -n "${GITOPS_REPO_URL:-}" ]] || die "Set GITOPS_REPO_URL for --upgrade"
   local bundle
   bundle="$(SPICE_RELEASE="${latest}" resolve_bundle_root)"
   materialize_tree "${bundle}" "${out}" "${GITOPS_REPO_URL}" "${GITOPS_TARGET_REVISION:-main}" "${latest}"
@@ -317,6 +491,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
     --gitops-repo) GITOPS_REPO_URL="$2"; shift 2 ;;
+    --gitops-pat) GITOPS_PAT="$2"; shift 2 ;;
     --revision) GITOPS_TARGET_REVISION="$2"; shift 2 ;;
     --release) SPICE_RELEASE="$2"; shift 2 ;;
     --materialize) MATERIALIZE_ONLY="$2"; shift 2 ;;
@@ -328,13 +503,27 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+GITOPS_REPO_URL="$(normalize_shell_token "${GITOPS_REPO_URL}")"
+GITOPS_TARGET_REVISION="$(normalize_shell_token "${GITOPS_TARGET_REVISION}")"
+if [[ -n "${SPICE_RELEASE:-}" ]]; then
+  SPICE_RELEASE="$(normalize_shell_token "${SPICE_RELEASE}")"
+fi
+
 if [[ "${MODE}" == "uninstall" ]]; then
   do_uninstall
   exit 0
 fi
 
 if [[ -n "${MATERIALIZE_ONLY}" ]]; then
-  prompt GITOPS_REPO_URL "GitOps repo HTTPS URL (.git):"
+  if [[ -z "${GITOPS_REPO_URL}" ]]; then
+    GITOPS_REPO_URL="https://github.com/local/spice-platform-local.git"
+  elif [[ -t 0 ]]; then
+    echo "GitOps URL is set to: ${GITOPS_REPO_URL}" >&2
+    read -r -p "Press Enter to keep it, or paste a different HTTPS .git URL: " _u || true
+    if [[ -n "${_u}" ]]; then
+      GITOPS_REPO_URL="$(normalize_shell_token "${_u}")"
+    fi
+  fi
   [[ "${GITOPS_REPO_URL}" == *.git ]] || GITOPS_REPO_URL="${GITOPS_REPO_URL%.}.git"
   bundle="$(resolve_bundle_root)"
   ver="$(effective_release)"
@@ -343,38 +532,106 @@ if [[ -n "${MATERIALIZE_ONLY}" ]]; then
   exit 0
 fi
 
+if [[ ! -t 0 ]] && [[ "${YES:-0}" == "0" ]]; then
+  YES=1
+fi
+
 if [[ "${MODE}" == "upgrade" ]]; then
   do_upgrade
   exit 0
 fi
 
-prompt GITOPS_REPO_URL "GitOps repo HTTPS URL (must end with .git):"
-[[ -n "${GITOPS_REPO_URL}" ]] || die "GITOPS_REPO_URL required"
-[[ "${GITOPS_REPO_URL}" == *.git ]] || GITOPS_REPO_URL="${GITOPS_REPO_URL%.}.git"
+if [[ -t 0 ]] && [[ -z "${GITOPS_REPO_URL}" ]] && [[ "${SPICE_DISABLE_LOCAL_GITOPS:-0}" != "1" ]]; then
+  echo "Tip: leave blank for a local-only Kind lab (no GitHub GitOps repository)." >&2
+  read -r -p "GitOps repository HTTPS URL (.git), optional: " GITOPS_REPO_URL || true
+  GITOPS_REPO_URL="$(normalize_shell_token "${GITOPS_REPO_URL}")"
+fi
 
-GITOPS_PAT="${GITOPS_PAT:-${GITHUB_TOKEN:-}}"
+SPICE_LOCAL_CLUSTER_MODE=0
+if [[ -z "${GITOPS_REPO_URL}" ]] && [[ "${SPICE_DISABLE_LOCAL_GITOPS:-0}" != "1" ]]; then
+  SPICE_LOCAL_CLUSTER_MODE=1
+fi
 
-prompt GITOPS_PAT "Git PAT for Argo + control plane (repo contents:write on GitOps repo) [env: GITOPS_PAT]:"
-[[ -n "${GITOPS_PAT:-}" ]] || die "GITOPS_PAT required for bootstrap"
+if [[ "${SPICE_LOCAL_CLUSTER_MODE}" -eq 1 ]]; then
+  SPICE_GITOPS_DIR="${SPICE_GITOPS_DIR:-${STATE_DIR}/materialized}"
+  mkdir -p "${SPICE_GITOPS_DIR}"
+  SPICE_GITOPS_DIR="$(cd "${SPICE_GITOPS_DIR}" && pwd)"
+  GITOPS_PAT="$(normalize_shell_token "${GITOPS_PAT:-}")"
+  if [[ -z "${GITOPS_PAT}" ]]; then
+    GITOPS_PAT="$(openssl rand -hex 16)"
+  fi
+  echo "Local-only lab: Gitea in Kind (UI $(gitea_web_url)); Argo will clone the GitOps tree over HTTP inside the cluster." >&2
+else
+  [[ -n "${GITOPS_REPO_URL}" ]] || die "Pass --gitops-repo https://github.com/org/repo.git for remote mode, or run interactively and leave the URL blank for a local-only lab."
+  [[ "${GITOPS_REPO_URL}" == *.git ]] || GITOPS_REPO_URL="${GITOPS_REPO_URL%.}.git"
+  SPICE_GITOPS_DIR="${SPICE_GITOPS_DIR:-$(pwd)/spice-gitops-work}"
+  GITOPS_PAT="${GITOPS_PAT:-${GITHUB_TOKEN:-}}"
+  if [[ -t 0 ]] && [[ -z "${GITOPS_PAT}" ]]; then
+    read -r -s -p "Git PAT for Argo + control plane (Enter to skip if the GitOps repo is public): " GITOPS_PAT || true
+    echo "" >&2
+  fi
+  GITOPS_PAT="$(normalize_shell_token "${GITOPS_PAT:-}")"
+  if [[ -z "${GITOPS_PAT}" ]]; then
+    echo "warning: no Git PAT; Argo needs credentials if the GitOps repository is private." >&2
+  fi
+  SPICE_GIT_EFFECTIVE_REPO_URL="${GITOPS_REPO_URL}"
+  echo "Using remote GitOps repository ${GITOPS_REPO_URL}" >&2
+fi
 
-SPICE_GITOPS_DIR="${SPICE_GITOPS_DIR:-$(pwd)/spice-gitops-work}"
+[[ "${SPICE_DISABLE_LOCAL_GITOPS:-0}" != "1" ]] || [[ -n "${GITOPS_REPO_URL}" ]] || die "SPICE_DISABLE_LOCAL_GITOPS=1 requires --gitops-repo with an HTTPS .git URL."
+
 bundle="$(resolve_bundle_root)"
 ver="$(effective_release)"
-materialize_tree "${bundle}" "${SPICE_GITOPS_DIR}" "${GITOPS_REPO_URL}" "${GITOPS_TARGET_REVISION}" "${ver}"
 
 KIND_CFG="${bundle}/hack/kind-config.yaml"
 [[ -f "${KIND_CFG}" ]] || KIND_CFG="${REPO_ROOT}/hack/kind-config.yaml"
-if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}\$"; then
-  kind create cluster --name "${CLUSTER_NAME}" --config "${KIND_CFG}"
-fi
-kubectl config use-context "kind-${CLUSTER_NAME}"
 
-helm_bootstrap "${SPICE_GITOPS_DIR}"
+if [[ "${SPICE_LOCAL_CLUSTER_MODE}" -eq 1 ]]; then
+  if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}\$"; then
+    kind create cluster --name "${CLUSTER_NAME}" --config "${KIND_CFG}"
+  else
+    echo "warning: Kind cluster '${CLUSTER_NAME}' already exists; continuing (recreate the cluster if Gitea or ingress drift)." >&2
+  fi
+  kubectl config use-context "kind-${CLUSTER_NAME}"
+
+  helm_bootstrap "${bundle}"
+
+  install_gitea_chart "${bundle}" "${GITOPS_PAT}"
+
+  SPICE_GITEA_PF_PORT="${SPICE_GITEA_PF_PORT:-3333}"
+  kubectl -n "${SPICE_GITEA_NAMESPACE}" port-forward "svc/${SPICE_GITEA_RELEASE}-http" "${SPICE_GITEA_PF_PORT}:3000" >/dev/null 2>&1 &
+  GITEA_PF_PID=$!
+  cleanup_gitea_pf() { kill "${GITEA_PF_PID:-0}" 2>/dev/null || true; }
+  trap cleanup_gitea_pf EXIT INT TERM
+
+  gitea_wait_api "${SPICE_GITEA_PF_PORT}"
+  gitea_create_empty_repo "${GITOPS_PAT}" "${SPICE_GITEA_PF_PORT}"
+
+  SPICE_GIT_EFFECTIVE_REPO_URL="$(gitea_internal_http_clone_url)"
+
+  materialize_tree "${bundle}" "${SPICE_GITOPS_DIR}" "${SPICE_GIT_EFFECTIVE_REPO_URL}" "${GITOPS_TARGET_REVISION}" "${ver}"
+  gitea_push_materialized_workdir "${SPICE_GITOPS_DIR}" "${GITOPS_PAT}" "${SPICE_GITEA_PF_PORT}"
+
+  cleanup_gitea_pf
+  trap - EXIT INT TERM
+  wait "${GITEA_PF_PID}" 2>/dev/null || true
+else
+  materialize_tree "${bundle}" "${SPICE_GITOPS_DIR}" "${SPICE_GIT_EFFECTIVE_REPO_URL}" "${GITOPS_TARGET_REVISION}" "${ver}"
+  if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}\$"; then
+    kind create cluster --name "${CLUSTER_NAME}" --config "${KIND_CFG}"
+  fi
+  kubectl config use-context "kind-${CLUSTER_NAME}"
+  helm_bootstrap "${SPICE_GITOPS_DIR}"
+fi
+
 kubectl -n vault wait --for=condition=ready pod/vault-0 --timeout=180s
 vault_eso_token
 apply_cluster_store "${SPICE_GITOPS_DIR}"
 argocd_install "${SPICE_GITOPS_DIR}"
-apply_argo_repo_secret "${GITOPS_REPO_URL}" "${GITOPS_PAT}"
+
+argo_repo_user=git
+[[ "${SPICE_GIT_EFFECTIVE_REPO_URL}" == http://* ]] && argo_repo_user="${SPICE_GITEA_ADMIN_USER}"
+apply_argo_repo_secret "${SPICE_GIT_EFFECTIVE_REPO_URL}" "${GITOPS_PAT}" "${argo_repo_user}"
 apply_root_app "${SPICE_GITOPS_DIR}"
 
 kubectl create namespace control-plane --dry-run=client -o yaml | kubectl apply -f -
@@ -387,5 +644,9 @@ kubectl -n control-plane create secret generic control-plane-secrets \
 
 write_state
 echo "Bootstrap complete. GitOps materialized at ${SPICE_GITOPS_DIR}"
-echo "Push ${SPICE_GITOPS_DIR} to ${GITOPS_REPO_URL} if not already connected, then sync Argo application platform-gitops."
+if [[ "${SPICE_LOCAL_CLUSTER_MODE}" -eq 1 ]]; then
+  echo "Local-only: browse Gitea at $(gitea_web_url). Credentials: ${STATE_DIR}/gitea-local-credentials.txt (mode 600). Control plane GitHub features still need a real GitHub PAT if you use them." >&2
+else
+  echo "Push ${SPICE_GITOPS_DIR} to ${GITOPS_REPO_URL} if not already connected, then sync Argo application platform-gitops."
+fi
 echo "Argo admin password: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
