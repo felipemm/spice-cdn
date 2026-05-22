@@ -32,6 +32,8 @@ Optional cluster policy: apply [`gitops/bootstrap/manifests/kyverno-require-owne
 
 Set `ingress.enabled: true` and **`ingress.host`** to a hostname that resolves to your ingress controller (for Kind + `nip.io`, e.g. `spice-demo.127.0.0.1.nip.io`).
 
+**Port 80 (and 443 with TLS):** Kubernetes Ingress always attaches rules to the controller’s **standard HTTP(S) ports**. You open **`http://<ingress.host>/`** (no `:8090` in the URL). The controller **proxies** that traffic to the Spice `Service` port **`ingress.httpBackendPort`** (default **8090**), which is where `spiced` listens. Override **`ingress.httpBackendPort`** only if you change the Spice HTTP listen port in the upstream chart.
+
 ## Local access without Ingress (port-forward)
 
 The upstream chart exposes **8090** (HTTP), **9090** (metrics), and **50051** (Arrow Flight) on the workload `Service` (`<helm-release>-spiceai`). Ingress in this chart only fronts **8090**. To reach **8090** or **50051** from your laptop without going through nginx, use `kubectl port-forward` against that Service (same pattern for both ports):

@@ -25,18 +25,19 @@ spec:
     - host: {{ $host | quote }}
       http:
         paths:
+          # Clients hit http(s)://<host>/ on the controller’s :80 / :443; backend is the Spice Service HTTP port (default 8090).
           - path: /
             pathType: Prefix
             backend:
-                service:
-                    name: {{ include "spice-instance.spiceaiServiceName" . }}
-                    port:
-                        number: 8090
+              service:
+                name: {{ include "spice-instance.spiceaiServiceName" . }}
+                port:
+                  number: {{ .Values.ingress.httpBackendPort | default 8090 }}
           - path: /metrics
             pathType: Prefix
             backend:
-                service:
-                    name: {{ include "spice-instance.spiceaiServiceName" . }}
-                    port:
-                        number: 9090
+              service:
+                name: {{ include "spice-instance.spiceaiServiceName" . }}
+                port:
+                  number: {{ .Values.ingress.metricsBackendPort | default 9090 }}
 {{- end }}

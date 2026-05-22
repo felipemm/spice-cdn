@@ -11,6 +11,10 @@ ingress:
   className: nginx
   # Full hostname for this instance (e.g. spice-demo.127.0.0.1.nip.io)
   host: ""
+  # Spice HTTP API port on the workload Service. Clients use the ingress hostname on standard :80/:443; nginx forwards here.
+  httpBackendPort: 8090
+  metricsBackendPort: 9090
+  flightSQLEndpoint: 50051
   tls:
     enabled: false
     secretName: ""
