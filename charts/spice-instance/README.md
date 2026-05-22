@@ -32,6 +32,20 @@ Optional cluster policy: apply [`gitops/bootstrap/manifests/kyverno-require-owne
 
 Set `ingress.enabled: true` and **`ingress.host`** to a hostname that resolves to your ingress controller (for Kind + `nip.io`, e.g. `spice-demo.127.0.0.1.nip.io`).
 
+## Local access without Ingress (port-forward)
+
+The upstream chart exposes **8090** (HTTP), **9090** (metrics), and **50051** (Arrow Flight) on the workload `Service` (`<helm-release>-spiceai`). Ingress in this chart only fronts **8090**. To reach **8090** or **50051** from your laptop without going through nginx, use `kubectl port-forward` against that Service (same pattern for both ports):
+
+```bash
+# HTTP API (optional if you already use the Ingress host)
+kubectl -n spice-instances port-forward svc/<helm-release>-spiceai 8090:8090
+
+# Arrow Flight
+kubectl -n spice-instances port-forward svc/<helm-release>-spiceai 50051:50051
+```
+
+Replace **`<helm-release>`** with the instance release name (for example **`example`** → Service **`example-spiceai`**).
+
 ## External Secrets + Vault
 
 When `externalSecret.enabled: true`, this chart renders an `ExternalSecret` that uses the cluster `ClusterSecretStore` named `externalSecret.clusterSecretStoreName` (default `vault-backend`) and syncs Vault path `externalSecret.vaultPath` into `externalSecret.targetSecretName`.

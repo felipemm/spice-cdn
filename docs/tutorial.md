@@ -361,16 +361,71 @@ Expect: JSON **`{"ok":true,...}`** from `/api/health`, and **`HTTP/1.1`** from `
 ### Cost governance (Kind as EKS)
 
 - **Budgets**: defaults and per-slug caps live in [`deploy/helm/control-plane/budgets.default.yaml`](../deploy/helm/control-plane/budgets.default.yaml) (mounted into the pod as `/config/budgets.yaml`). Mirror for docs in [`gitops/cost/budgets.yaml`](../gitops/cost/budgets.yaml). Tune `maxInstancesPerSlug` / optional `maxEstimatedMonthlyUsdPerSlug`, sync the `control-plane` app, and restart if needed.
-- **Declared cost estimates**: the control plane uses configurable **vCPU / GiB-month** factors. Set `cost.pricingJson` for explicit numbers, or **`cost.nodeInstanceType`** (Helm → **`COST_NODE_INSTANCE_TYPE`**) to pick a built-in EC2 reference (see `apps/control-plane/src/lib/aws-pricing.ts`). **`AWS_REGION`** is echoed in the cost summary for “Kind as EKS” alignment with Cost Explorer.
-- **OpenCost** (optional): install per [`gitops/addons/opencost/README.md`](../gitops/addons/opencost/README.md), then set `cost.opencostBaseUrl` on the control-plane chart (for example `http://opencost.opencost.svc.cluster.local:9003`).
-- **AWS Cost Explorer** (optional, EKS): attach an IAM role to the control-plane `ServiceAccount` (**IRSA**) using [`docs/iam-control-plane-cost-explorer.json`](../docs/iam-control-plane-cost-explorer.json), set `serviceAccount.annotations.eks.amazonaws.com/role-arn`, and set `cost.awsCostExplorerEnabled: "true"`. The API returns **account-level** last-30d unblended cost (not per slug).
+- **Declared cost estimates**: the control plane uses configurable **vCPU / GiB-month** factors. Set `cost.pricingJson` for explicit numbers, or **`cost.nodeInstanceType`** (Helm → **`COST_NODE_INSTANCE_TYPE`**) to pick a built-in EC2 reference (see [`apps/control-plane/src/lib/aws-pricing.ts`](../apps/control-plane/src/lib/aws-pricing.ts)). **`AWS_REGION`** is echoed in the cost summary for “Kind as EKS” alignment with Cost Explorer.
+- **OpenCost** (optional): see **Optional: Prometheus + OpenCost (Kind)** below. After OpenCost runs, set **`cost.opencostBaseUrl`** on the control-plane chart (in-cluster API, typically `http://opencost.opencost.svc.cluster.local:9003` when the OpenCost release name is **`opencost`**). The OpenCost **UI** can be exposed on port 80 via ingress; see [`gitops/addons/opencost/README.md`](../gitops/addons/opencost/README.md).
+- **AWS Cost Explorer** (optional, real AWS only): attach an IAM role to the control-plane `ServiceAccount` (**IRSA**) using [`docs/iam-control-plane-cost-explorer.json`](../docs/iam-control-plane-cost-explorer.json), set `serviceAccount.annotations.eks.amazonaws.com/role-arn`, and set `cost.awsCostExplorerEnabled: "true"`. The API returns **account-level** last-30d unblended cost (not per slug). Skip on Kind unless you intentionally wire cloud credentials.
 - **Kyverno** (optional admission): after [Kyverno](https://kyverno.io/) is installed, apply [`gitops/bootstrap/manifests/kyverno-require-owner-layer-slug.yaml`](../gitops/bootstrap/manifests/kyverno-require-owner-layer-slug.yaml) so Pods in **`spice-instances`** must carry label **`owner-layer-slug`**.
 - **CI**: PRs touching `gitops/instances/**/values.yaml` run [`.github/workflows/validate-instances.yml`](../.github/workflows/validate-instances.yml) (`helm template` per instance).
+
+### Optional: Prometheus + OpenCost (Kind)
+
+OpenCost’s default config talks to in-cluster Prometheus at **`http://prometheus-server.prometheus-system.svc.cluster.local:80`**. If that Service does not exist, OpenCost logs show **`no such host`** / **`Prometheus communication error`** and the UI stays empty or degraded. Install **Prometheus first**, then **OpenCost**, then point the control plane at OpenCost.
+
+1. **Add Helm repos** (once per machine):
+
+   ```bash
+   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+   helm repo add opencost https://opencost.github.io/opencost-helm-chart
+   helm repo update
+   ```
+
+2. **Install Prometheus** (minimal Kind values; Service name **`prometheus-server`** matches OpenCost defaults — see [`gitops/addons/prometheus/README.md`](../gitops/addons/prometheus/README.md)):
+
+   ```bash
+   helm upgrade --install prometheus prometheus-community/prometheus \
+     -n prometheus-system --create-namespace \
+     -f gitops/addons/prometheus/values-kind.yaml
+   kubectl -n prometheus-system rollout status deploy/prometheus-server --timeout=300s
+   ```
+
+   **Validate:**
+
+   ```bash
+   kubectl -n prometheus-system get svc prometheus-server
+   ```
+
+   Expect: Service **`prometheus-server`** in namespace **`prometheus-system`**, **`CLUSTER-IP`** assigned.
+
+3. **Install OpenCost** (enables internal Prometheus client + **ingress-nginx** UI host `opencost.127.0.0.1.nip.io` — see [`gitops/addons/opencost/README.md`](../gitops/addons/opencost/README.md)):
+
+   ```bash
+   helm upgrade --install opencost opencost/opencost -n opencost --create-namespace \
+     --version 1.33.1 -f gitops/addons/opencost/values-kind.yaml
+   kubectl -n opencost rollout status deploy/opencost --timeout=300s
+   ```
+
+   **Validate:**
+
+   ```bash
+   kubectl -n opencost get ingress,svc,pods
+   curl -sI --connect-timeout 3 -H "Host: opencost.127.0.0.1.nip.io" http://127.0.0.1/ | head -5
+   ```
+
+   Expect: **`Ingress`** for `opencost.127.0.0.1.nip.io`, OpenCost pod(s) **`Running`**, `curl` returns **`HTTP/1.1`** from nginx (not connection refused).
+
+4. **Wire the control plane** (commit or override Helm values, then sync Argo):
+
+   - Set **`cost.opencostBaseUrl`** to `http://opencost.opencost.svc.cluster.local:9003` (in-cluster allocation API on port **9003**).
+   - Sync the **`control-plane`** `Application` and wait for rollout.
+
+5. **Optional warnings:** OpenCost may still log missing series for **`kubecost_*`** network metrics unless you run Kubecost exporters; that is normal on a minimal Prometheus stack and does not block basic allocation views once Prometheus is up.
 
 ### Troubleshooting
 
 | Symptom | Things to check |
 |---------|------------------|
+| OpenCost logs **`lookup prometheus-server.prometheus-system... no such host`** or empty UI | OpenCost expects Prometheus at the default in-cluster URL. Install Prometheus per **Optional: Prometheus + OpenCost (Kind)** above, then `kubectl -n opencost rollout restart deploy/opencost`. |
+| OpenCost warnings about **`kubecost_pod_network_egress_bytes_total`** (or other `kubecost_*` metrics) | Normal without Kubecost exporters; core allocation can still work from standard kubelet / cAdvisor / kube-state-metrics scrapes. |
 | `403` from GitHub API | Token scopes, `GITHUB_OWNER` / `GITHUB_REPO`, branch name, and whether branch protection blocks the automation user. |
 | Argo `Unknown` / sync errors | Repo Secret in `argocd` namespace, placeholder URLs still present, or chart path `charts/spice-instance` / `valueFiles` path. |
 | Vault read/write errors | `VAULT_TOKEN` in the control-plane Secret, KV v2 mount path, and Vault policies allowing the token to read/write `spice/instances/*`. |
@@ -401,3 +456,4 @@ Expect: JSON **`{"ok":true,...}`** from `/api/health`, and **`HTTP/1.1`** from `
 - [Spice Helm — Kubernetes](https://spiceai.org/docs/deployment/kubernetes)
 - [Argo CD ApplicationSet](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/)
 - [External Secrets — Vault](https://external-secrets.io/latest/provider/hashicorp-vault/)
+- [OpenCost addon](../gitops/addons/opencost/README.md) and [Prometheus addon](../gitops/addons/prometheus/README.md) (Kind cost stack)
