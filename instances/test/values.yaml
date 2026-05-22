@@ -15,7 +15,58 @@ spiceai:
     name: app
     version: v1
     kind: Spicepod
-    datasets: []
+    models:
+      - from: openai:openai/gpt-4o-mini
+        name: openrouter_gpt-4o-mini
+        params:
+          openai_api_key: ${ secrets:OPENAI_API_KEY }
+          endpoint: ${ env:OPENAI_ENDPOINT }
+          tools: auto
+
+    runtime:
+      caching:
+        sql_results:
+          enabled: true
+          max_size: 1GiB # Default 128 MiB
+          item_ttl: 1h # Default 1s
+          stale_while_revalidate_ttl: 1h # Default 0s (disabled)
+        search_results:
+          enabled: true
+          max_size: 1GiB # Default 128 MiB
+          item_ttl: 1m # Default 1s
+
+    databricks_settings: &databricks_settings
+      mode: sql_warehouse
+      databricks_endpoint: ${ env:DATABRICKS_HOST }
+      databricks_client_id: ${secrets:DATABRICKS_CLIENT_ID} # service principal client id
+      databricks_client_secret: ${secrets:DATABRICKS_CLIENT_SECRET} # service principal client secret
+      databricks_sql_warehouse_id: ${ env:DATABRICKS_SQL_WAREHOUSE_ID }
+    acceleration_settings: &acceleration_settings
+      enabled: true
+      on_zero_results: use_source
+      refresh_on_startup: always
+      refresh_mode: full
+      refresh_cron: '0 9 * * 1-5'
+
+
+    datasets:
+      - from: databricks:platform.dataviz.judge_dredd_canceled_queries
+        name: judge_dredd_canceled_queries
+        params: *databricks_settings
+        acceleration: *acceleration_settings
+      - from: databricks:main.thoughtspot_server.connections
+        name: connections
+        params: *databricks_settings
+        acceleration:
+          enabled: true
+          on_zero_results: use_source
+          refresh_on_startup: always
+          refresh_mode: full
+          refresh_cron: '0 9 * * 1-5'
+          refresh_sql: |
+            SELECT * FROM connections
+            WHERE dt = (select max(dt) from connections)
+  
   additionalEnv: []
   service:
     type: ClusterIP
