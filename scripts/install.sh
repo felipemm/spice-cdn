@@ -106,7 +106,7 @@ download_release() {
   local dest="$2"
   local url="https://github.com/${SPICE_PRODUCT_REPO}/releases/download/${ver}/spice-platform-${ver}.tar.gz"
   mkdir -p "${dest}"
-  echo "Downloading ${url}"
+  echo "Downloading ${url}" >&2
   if ! curl -fsSL -o "${dest}/bundle.tgz" "${url}"; then
     die "failed to download release ${ver}. Set SPICE_PRODUCT_REPO or create a GitHub Release with spice-platform-${ver}.tar.gz"
   fi
