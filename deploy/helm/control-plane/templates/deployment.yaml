@@ -30,12 +30,19 @@ spec:
           env:
             - name: NODE_ENV
               value: production
+            - name: GITOPS_REPO_OWNER
+              value: {{ .Values.env.gitopsRepoOwner | quote }}
+            - name: GITOPS_REPO_NAME
+              value: {{ .Values.env.gitopsRepoName | quote }}
+            - name: GITOPS_REPO_BRANCH
+              value: {{ .Values.env.gitopsRepoBranch | quote }}
+            # Backward compatibility for older chart values / local .env
             - name: GITHUB_OWNER
-              value: {{ .Values.env.githubOwner | quote }}
+              value: {{ .Values.env.gitopsRepoOwner | quote }}
             - name: GITHUB_REPO
-              value: {{ .Values.env.githubRepo | quote }}
+              value: {{ .Values.env.gitopsRepoName | quote }}
             - name: GITHUB_BRANCH
-              value: {{ .Values.env.githubBranch | quote }}
+              value: {{ .Values.env.gitopsRepoBranch | quote }}
             - name: VAULT_ADDR
               value: {{ .Values.env.vaultAddr | quote }}
             - name: VAULT_ROLE
@@ -44,11 +51,16 @@ spec:
               value: {{ .Values.env.argocdNamespace | quote }}
             - name: SPICE_NAMESPACE
               value: {{ .Values.env.spiceNamespace | quote }}
+            - name: GITOPS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.gitopsTokenSecretName }}
+                  key: {{ .Values.secrets.gitopsTokenSecretKey }}
             - name: GITHUB_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.secrets.githubTokenSecretName }}
-                  key: {{ .Values.secrets.githubTokenSecretKey }}
+                  name: {{ .Values.secrets.gitopsTokenSecretName }}
+                  key: {{ .Values.secrets.gitopsTokenSecretKey }}
             - name: VAULT_TOKEN
               valueFrom:
                 secretKeyRef:

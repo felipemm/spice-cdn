@@ -1,4 +1,4 @@
-import { assertGithubConfigured, getSpiceNamespace } from "@/lib/config";
+import { assertGitopsRepoConfigured, getSpiceNamespace } from "@/lib/config";
 import { createOctokit, listInstanceNames } from "@/lib/github-service";
 import { listPodsInNamespace, listStatefulSetsInNamespace } from "@/lib/k8s";
 import { parseInstanceValuesYaml } from "@/lib/instance-values";
@@ -57,7 +57,7 @@ export async function buildCostSummary(): Promise<CostSummary> {
   const budgets = loadBudgets();
   const names = await listInstanceNames();
   const octokit = createOctokit();
-  const { owner, repo, branch } = assertGithubConfigured();
+  const { owner, repo, branch } = assertGitopsRepoConfigured();
 
   const slugMap = new Map<
     string,
@@ -185,7 +185,7 @@ async function collectLiveSpicePods(): Promise<{
 
 export async function listInstanceSlugSummaries(): Promise<Array<{ name: string; slug: string | null }>> {
   const octokit = createOctokit();
-  const { owner, repo, branch } = assertGithubConfigured();
+  const { owner, repo, branch } = assertGitopsRepoConfigured();
   const names = await listInstanceNames();
   const out: Array<{ name: string; slug: string | null }> = [];
   for (const name of names) {

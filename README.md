@@ -1,32 +1,96 @@
-# Spice GitOps control plane (Kind + GitHub + Vault + Argo CD)
+# Spice CDN — product vs GitOps
 
-This repository implements a **Next.js control plane** that manages **Spice.ai** Helm deployments through **GitOps** (GitHub as source of truth, **Argo CD** as reconciler), with **HashiCorp Vault** + **External Secrets Operator** for secret material, and a **Kind**-first local path.
+This repository is the **product**: Next.js control plane, Helm charts, installer, CI, and documentation site source. **Runtime GitOps** (what Argo CD reconciles) lives in a **separate repository** that you own.
 
-## What lives here
+```mermaid
+flowchart LR
+  subgraph product [This repo]
+    code[apps charts templates]
+    rel[GitHub Releases tarball]
+    site[Docs site + install.sh]
+  end
+  subgraph gitops [Your GitOps repo]
+    inst[instances]
+    apps[Argo Applications]
+  end
+  subgraph cluster [Kind / K8s]
+    argo[Argo CD]
+    cp[control-plane]
+  end
+  site -->|curl install.sh| code
+  rel -->|pinned SPICE_RELEASE| code
+  code -->|materialize| gitops
+  gitops --> argo
+  argo --> cp
+```
 
-| Path | Purpose |
-|------|---------|
-| [`apps/control-plane`](apps/control-plane) | Next.js app: instances CRUD via GitHub Contents API, Vault KV editor, Argo sync/refresh + **admin** stack dashboard + **cost / budgets** (optional OpenCost + AWS Cost Explorer). |
-| [`apps/control-plane-mcp`](apps/control-plane-mcp) | **FastMCP** (Python) **Streamable HTTP** at `/mcp`; Helm **sidecar** proxies the Next API for remote Cursor / Claude clients (**enabled by default** in chart values). |
-| [`charts/spice-instance`](charts/spice-instance) | Wrapper Helm chart around upstream `spiceai` + Ingress + optional `ExternalSecret`; requires **`ownerLayerSlug`** / **`owner-layer-slug`** labels. |
-| [`gitops/apps`](gitops/apps) | Argo CD `AppProject`, `ApplicationSet` (`instances/*`), `Application` for the control plane. |
-| [`gitops/bootstrap`](gitops/bootstrap) | Reference Helm values + one-shot manifests (ingress, Vault, ESO, Argo, root `Application`, optional **Kyverno** policy for `owner-layer-slug`). |
-| [`gitops/instances`](gitops/instances) | Per-instance `values.yaml` folders discovered by the `ApplicationSet`. |
-| [`gitops/cost`](gitops/cost) | Budget defaults (mirror of Helm `budgets.default.yaml`; tune per-slug caps). |
-| [`gitops/addons/opencost`](gitops/addons/opencost) | Optional OpenCost UI/API + Kind ingress notes. |
-| [`gitops/addons/kube-prometheus-stack`](gitops/addons/kube-prometheus-stack) | **Optional** Prometheus Operator + Prometheus + **Grafana** (Kind values) — Prometheus endpoint for OpenCost (`kps-kube-prometheus-stack-prometheus.monitoring:9090`). |
-| [`hack/kind-config.yaml`](hack/kind-config.yaml) | Kind cluster with ingress-ready node + host port mappings. |
-| [`docs/tutorial.md`](docs/tutorial.md) | **Step-by-step** Kind tutorial (day‑0 bootstrap vs day‑2 webapp-only operations). |
+| Path | Role |
+|------|------|
+| [`apps/control-plane`](apps/control-plane) | Web UI + APIs (writes instance YAML in **GitOps** repo via GitHub Contents API / Octokit). |
+| [`apps/control-plane-mcp`](apps/control-plane-mcp) | FastMCP sidecar. |
+| [`charts/spice-instance`](charts/spice-instance) | Wrapper Helm chart (copied into your GitOps repo by the installer). |
+| [`deploy/helm/control-plane`](deploy/helm/control-plane) | Control-plane chart (same). |
+| [`templates/gitops/`](templates/gitops) | **Templates** for Argo manifests + bootstrap Helm values (`__GITOPS_*__` placeholders). |
+| [`examples/instances/`](examples/instances) | Example `values.yaml` validated in CI — **not** cluster SoT. |
+| [`scripts/install.sh`](scripts/install.sh) | Downloads a **GitHub Release** tarball, materializes a GitOps tree, bootstraps Kind + ingress + Vault + ESO + Argo. |
+| [`website/`](website/) | Astro + Starlight site; build copies `install.sh` to `public/`. |
+| [`docs/tutorial.md`](docs/tutorial.md) | Manual Kind walkthrough (paths use `templates/gitops/bootstrap/...`). |
+| [`docs/migration-two-repos.md`](docs/migration-two-repos.md) | Move from monorepo to product + GitOps. |
 
-## Quick links
+## Install (pinned release)
 
-- [Spice Helm on Kubernetes](https://spiceai.org/docs/deployment/kubernetes)
-- [External Secrets — Vault provider](https://external-secrets.io/latest/provider/hashicorp-vault/)
+1. Create an empty **GitOps** GitHub repo and a PAT with **`repo`** scope.
+2. From the **docs site** (GitHub Pages after you enable it), or from a release tarball:
 
-## Control plane image
+```bash
+curl -fsSL "https://<owner>.github.io/<repo>/install.sh" | bash
+```
 
-**GitHub Actions + Kind:** On push to `main` (when `apps/control-plane` changes), [`.github/workflows/control-plane-image.yml`](.github/workflows/control-plane-image.yml) builds a **multi-arch** image (`linux/amd64` + `linux/arm64` for Kind on Apple Silicon), pushes **`ghcr.io/<owner>/<repo>/control-plane`**, and commits **`image.tag`** into [`deploy/helm/control-plane/values.yaml`](deploy/helm/control-plane/values.yaml). Argo CD applies that chart and kubelet **pulls from GHCR** (no `kind load`). Use **Actions → Control plane image → Run workflow** to bootstrap or refresh after workflow changes.
+The served `install.sh` is copied from this repo at build time; **releases** set `SPICE_PACKAGED_RELEASE` inside the packaged script. Override with `SPICE_RELEASE=vX.Y.Z`.
 
-**Optional — local image into Kind** (air-gapped or fast iteration): `make image-build` then `make image-load-local`, and override Helm `image.repository` / `image.tag` on the Argo `Application` (see [tutorial](docs/tutorial.md) Part B).
+**Local / dev** (uses the git checkout instead of downloading a release):
 
-Full bootstrap and configuration variables are documented in **[`docs/tutorial.md`](docs/tutorial.md)**.
+```bash
+export SPICE_RELEASE=0.0.0-dev
+./scripts/install.sh
+```
+
+**Materialize only** (no cluster):
+
+```bash
+./scripts/install.sh --materialize ./out --gitops-repo https://github.com/org/my-gitops.git
+```
+
+**Auto-upgrade** (re-download latest GitHub release and re-render tree):
+
+```bash
+export GITOPS_REPO_URL=https://github.com/org/my-gitops.git
+./scripts/install.sh --upgrade
+```
+
+**Uninstall** (Kind cluster `spice-gitops`):
+
+```bash
+./scripts/install.sh --uninstall --all
+```
+
+## Releases
+
+Tag `v*` → workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) publishes `spice-platform-<tag>.tar.gz` + `.sha256` and attaches them to a GitHub Release.
+
+## Control plane environment
+
+Use **`GITOPS_REPO_OWNER`**, **`GITOPS_REPO_NAME`**, **`GITOPS_REPO_BRANCH`**, **`GITOPS_TOKEN`** (Helm: `env.gitopsRepo*` + `secrets.gitopsTokenSecretKey`). Legacy **`GITHUB_*`** env vars are still read for compatibility.
+
+## CI
+
+- Control plane / MCP images: existing GHCR workflows on `main`.
+- Instance YAML lint: [`.github/workflows/validate-instances.yml`](.github/workflows/validate-instances.yml) on `examples/instances/**`.
+- **Pages**: [`.github/workflows/pages.yml`](.github/workflows/pages.yml) builds `website/` and deploys to GitHub Pages (set repo variables `PUBLIC_ASTRO_SITE` / `PUBLIC_ASTRO_BASE` to override defaults).
+
+## Makefile
+
+```bash
+make kind-create   # Kind cluster (hack/kind-config.yaml)
+make kind-delete
+```

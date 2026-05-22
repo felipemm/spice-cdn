@@ -11,7 +11,7 @@ spec:
   description: Spice GitOps platform (instances + control plane)
   sourceRepos:
     - "https://helm.spiceai.org"
-    - "https://github.com/felipemm/spice-cdn.git"
+    - "__GITOPS_REPO_HTTPS_URL__"
   destinations:
     - namespace: spice-instances
       server: https://kubernetes.default.svc

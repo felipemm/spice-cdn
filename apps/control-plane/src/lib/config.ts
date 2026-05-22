@@ -6,21 +6,33 @@ export function requireEnv(name: string): string {
   return v;
 }
 
-export function getGithubConfig() {
-  return {
-    token: process.env.GITHUB_TOKEN ?? "",
-    owner: process.env.GITHUB_OWNER ?? "",
-    repo: process.env.GITHUB_REPO ?? "",
-    branch: process.env.GITHUB_BRANCH ?? "main",
-  };
+/** GitOps repository (where `instances/*` live) — GitHub API / Octokit. */
+export function getGitopsRepoConfig() {
+  const token = process.env.GITOPS_TOKEN ?? process.env.GITHUB_TOKEN ?? "";
+  const owner = process.env.GITOPS_REPO_OWNER ?? process.env.GITHUB_OWNER ?? "";
+  const repo = process.env.GITOPS_REPO_NAME ?? process.env.GITHUB_REPO ?? "";
+  const branch = process.env.GITOPS_REPO_BRANCH ?? process.env.GITHUB_BRANCH ?? "main";
+  return { token, owner, repo, branch };
 }
 
-export function assertGithubConfigured() {
-  const c = getGithubConfig();
+export function assertGitopsRepoConfigured() {
+  const c = getGitopsRepoConfig();
   if (!c.token || !c.owner || !c.repo) {
-    throw new Error("GitHub is not configured (GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO).");
+    throw new Error(
+      "GitOps repo is not configured (GITOPS_TOKEN, GITOPS_REPO_OWNER, GITOPS_REPO_NAME). Legacy GITHUB_* vars are still accepted.",
+    );
   }
   return c;
+}
+
+/** @deprecated use getGitopsRepoConfig */
+export function getGithubConfig() {
+  return getGitopsRepoConfig();
+}
+
+/** @deprecated use assertGitopsRepoConfigured */
+export function assertGithubConfigured() {
+  return assertGitopsRepoConfigured();
 }
 
 export function getVaultConfig() {

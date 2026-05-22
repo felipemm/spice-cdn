@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Spice GitOps control plane",
-  description: "Manage Spice Helm instances via GitHub, Vault, and Argo CD",
+  description: "Manage Spice Helm instances via your GitOps repo, Vault, and Argo CD",
 };
 
 export default function RootLayout({

@@ -9,7 +9,7 @@ import {
   syncArgoApplication,
 } from "@/lib/k8s";
 import { vaultHealth } from "@/lib/vault";
-import { getArgoNamespace, getGithubConfig, getSpiceNamespace } from "@/lib/config";
+import { getArgoNamespace, getGitopsRepoConfig, getSpiceNamespace } from "@/lib/config";
 
 export async function GET(request: Request) {
   const denied = assertAdmin(request);
@@ -18,22 +18,22 @@ export async function GET(request: Request) {
   try {
     const argoNs = getArgoNamespace();
     const spiceNs = getSpiceNamespace();
-    const [apps, eso, vault, podsArgo, podsSpice, eventsArgo, gh] = await Promise.all([
+    const [apps, eso, vault, podsArgo, podsSpice, eventsArgo, gitops] = await Promise.all([
       listArgoApplications(),
       listExternalSecrets(),
       vaultHealth(),
       listPodsInNamespace(argoNs).catch(() => []),
       listPodsInNamespace(spiceNs).catch(() => []),
       listEventsInNamespace(argoNs).catch(() => []),
-      Promise.resolve(getGithubConfig()),
+      Promise.resolve(getGitopsRepoConfig()),
     ]);
 
     return NextResponse.json({
-      github: {
-        configured: Boolean(gh.token && gh.owner && gh.repo),
-        owner: gh.owner,
-        repo: gh.repo,
-        branch: gh.branch,
+      gitops: {
+        configured: Boolean(gitops.token && gitops.owner && gitops.repo),
+        owner: gitops.owner,
+        repo: gitops.repo,
+        branch: gitops.branch,
       },
       vault: vault,
       argocd: {

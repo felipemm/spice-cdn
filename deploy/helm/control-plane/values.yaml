@@ -16,10 +16,10 @@ ingress:
   host: control-plane.127.0.0.1.nip.io
   annotations: {}
 env:
-  # GitHub repository backing GitOps (same values Argo uses)
-  githubOwner: felipemm
-  githubRepo: spice-cdn
-  githubBranch: main
+  # Git repository where Argo syncs instance values (operator-owned GitOps repo). Octokit uses GitHub API.
+  gitopsRepoOwner: felipemm
+  gitopsRepoName: spice-cdn
+  gitopsRepoBranch: main
   # Vault address inside the cluster (Service DNS for the Helm release; not the StatefulSet pod name).
   vaultAddr: http://vault.vault.svc.cluster.local:8200
   vaultRole: control-plane
@@ -42,8 +42,8 @@ rbac:
   create: true
 secrets:
   # Reference existing Secret keys mounted into the pod (do not commit real values).
-  githubTokenSecretName: control-plane-secrets
-  githubTokenSecretKey: github_token
+  gitopsTokenSecretName: control-plane-secrets
+  gitopsTokenSecretKey: gitops_token
   vaultTokenSecretName: control-plane-secrets
   vaultTokenSecretKey: vault_token
   adminApiKeySecretName: control-plane-secrets

@@ -1,0 +1,60 @@
+# Build and deploy the marketing + Starlight docs site to GitHub Pages.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "scripts/install.sh"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install & build
+        working-directory: website
+        env:
+          PUBLIC_ASTRO_SITE: ${{ vars.PUBLIC_ASTRO_SITE }}
+          PUBLIC_ASTRO_BASE: ${{ vars.PUBLIC_ASTRO_BASE }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+          export PUBLIC_ASTRO_SITE="${PUBLIC_ASTRO_SITE:-https://${REPO_OWNER}.github.io/${REPO_NAME}/}"
+          export PUBLIC_ASTRO_BASE="${PUBLIC_ASTRO_BASE:-/${REPO_NAME}/}"
+          npm ci
+          npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

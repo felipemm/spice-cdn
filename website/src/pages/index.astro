@@ -1,0 +1,199 @@
+---
+// Hermes-inspired marketing shell; Starlight docs live under /guides/* when base is /.
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spice CDN — GitOps control plane</title>
+    <meta
+      name="description"
+      content="Kind-first Spice.ai platform: product repo vs your GitOps repo, Argo CD, Vault, installer pinned to releases."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b0f14;
+        --fg: #e8eef7;
+        --muted: #9fb0c8;
+        --accent: #6ee7ff;
+        --card: #121922;
+        --border: #223044;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, -apple-system, sans-serif;
+        background: radial-gradient(1200px 600px at 20% -10%, #1a2740 0%, var(--bg) 55%);
+        color: var(--fg);
+        min-height: 100vh;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1.25rem 2rem;
+        border-bottom: 1px solid var(--border);
+        backdrop-filter: blur(8px);
+        position: sticky;
+        top: 0;
+        background: rgba(11, 15, 20, 0.85);
+      }
+      nav a {
+        color: var(--muted);
+        text-decoration: none;
+        margin-left: 1.25rem;
+        font-weight: 500;
+      }
+      nav a:hover {
+        color: var(--fg);
+      }
+      .hero {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 4rem 1.5rem 3rem;
+        text-align: center;
+      }
+      .eyebrow {
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        color: var(--muted);
+      }
+      h1 {
+        font-size: clamp(2rem, 4vw, 3rem);
+        line-height: 1.1;
+        margin: 0.75rem 0 1rem;
+        background: linear-gradient(120deg, #fff 0%, #9bd8ff 45%, var(--accent) 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .lead {
+        color: var(--muted);
+        font-size: 1.1rem;
+        max-width: 640px;
+        margin: 0 auto 2rem;
+        line-height: 1.6;
+      }
+      .steps {
+        display: grid;
+        gap: 1rem;
+        max-width: 720px;
+        margin: 0 auto 3rem;
+        text-align: left;
+      }
+      .step {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+      }
+      .step strong {
+        color: var(--accent);
+      }
+      pre {
+        background: #0a0d12;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.85rem 1rem;
+        overflow-x: auto;
+        font-size: 0.85rem;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+        max-width: 1000px;
+        margin: 0 auto 4rem;
+        padding: 0 1.5rem;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.25rem;
+      }
+      .card h3 {
+        margin: 0 0 0.5rem;
+        font-size: 1rem;
+      }
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+        line-height: 1.5;
+      }
+      footer {
+        border-top: 1px solid var(--border);
+        padding: 2rem;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>Spice CDN</strong>
+      <nav>
+        <a href={`${import.meta.env.BASE_URL}guides/install/`}>Install</a>
+        <a href={`${import.meta.env.BASE_URL}guides/architecture/`}>Architecture</a>
+        <a href="https://github.com/">Source</a>
+      </nav>
+    </header>
+    <section class="hero">
+      <div class="eyebrow">Open platform · Kind-first</div>
+      <h1>Product code and your deployment, decoupled.</h1>
+      <p class="lead">
+        This site ships <code>install.sh</code> pinned to a GitHub Release. Argo CD syncs <strong>your</strong> GitOps
+        repository — never the product repo — so upgrades and instance YAML stay in your org.
+      </p>
+      <div class="steps">
+        <div class="step"><strong>1.</strong> Create an empty GitOps repo and a classic PAT with <code>repo</code> scope.</div>
+        <div class="step"><strong>2.</strong> Run the installer (downloads the pinned release tarball and materializes GitOps).</div>
+        <div class="step"><strong>3.</strong> Push the generated tree to your GitOps repo and let Argo reconcile.</div>
+      </div>
+      <p class="eyebrow">Quick install</p>
+      <pre id="install-cmd">curl -fsSL …/install.sh | bash</pre>
+    </section>
+    <section class="grid">
+      <div class="card">
+        <h3>Release-pinned</h3>
+        <p>Install bundles come from GitHub Releases with checksums; override with <code>SPICE_RELEASE</code>.</p>
+      </div>
+      <div class="card">
+        <h3>Auto-upgrade path</h3>
+        <p>Use <code>install.sh --upgrade</code> or Renovate on your GitOps repo to bump <code>platform-version.yaml</code>.</p>
+      </div>
+      <div class="card">
+        <h3>Uninstall</h3>
+        <p><code>install.sh --uninstall --all</code> removes the Kind cluster created by the script.</p>
+      </div>
+    </section>
+    <footer>
+      Set <code>PUBLIC_ASTRO_SITE</code> and <code>PUBLIC_ASTRO_BASE</code> when building for GitHub Pages (project sites need a
+      non-root base).
+    </footer>
+    <script
+      define:vars={{
+        baseUrl: import.meta.env.BASE_URL,
+      }}
+    >
+      const pre = document.getElementById("install-cmd");
+      if (pre) {
+        const b = (baseUrl || "/").replace(/\/$/, "");
+        pre.textContent = `curl -fsSL ${window.location.origin}${b}/install.sh | bash`;
+      }
+    </script>
+  </body>
+</html>

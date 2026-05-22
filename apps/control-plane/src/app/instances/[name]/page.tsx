@@ -48,7 +48,7 @@ export default function InstanceDetailPage() {
       if (!res.ok) throw new Error(data.error ?? res.statusText);
       const v = await fetch(`/api/instances/${encodeURIComponent(name)}`).then((r) => r.json());
       setSha(v.sha ?? null);
-      setMsg("Saved to GitHub.");
+      setMsg("Saved to GitOps repository.");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Save failed");
     } finally {

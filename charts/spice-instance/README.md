@@ -26,7 +26,7 @@ Every release must set **`ownerLayerSlug`** (DNS-like lowercase label). The char
 - Adds **`owner-layer-slug`** to **Ingress** and **ExternalSecret** metadata.
 - Expects **`spiceai.additionalLabels.owner-layer-slug`** to match for Pod labels (set by the control-plane instance template).
 
-Optional cluster policy: apply [`gitops/bootstrap/manifests/kyverno-require-owner-layer-slug.yaml`](../../gitops/bootstrap/manifests/kyverno-require-owner-layer-slug.yaml) after Kyverno is installed.
+Optional cluster policy: apply [`templates/gitops/bootstrap/manifests/kyverno-require-owner-layer-slug.yaml`](../../templates/gitops/bootstrap/manifests/kyverno-require-owner-layer-slug.yaml) after Kyverno is installed.
 
 ## Ingress
 
@@ -52,7 +52,7 @@ Replace **`<helm-release>`** with the instance release name (for example **`exam
 
 When `externalSecret.enabled: true`, this chart renders an `ExternalSecret` that uses the cluster `ClusterSecretStore` named `externalSecret.clusterSecretStoreName` (default `vault-backend`) and syncs Vault path `externalSecret.vaultPath` into `externalSecret.targetSecretName`.
 
-**Prerequisite:** that `ClusterSecretStore` must exist on the cluster (for this repo, apply [`gitops/bootstrap/manifests/cluster-secret-store.yaml`](../../gitops/bootstrap/manifests/cluster-secret-store.yaml) during bootstrap; see `docs/tutorial.md`). If the store is missing, `ExternalSecret` stays **Degraded** with `ClusterSecretStore ... not found`.
+**Prerequisite:** that `ClusterSecretStore` must exist on the cluster (for this repo, apply [`templates/gitops/bootstrap/manifests/cluster-secret-store.yaml`](../../templates/gitops/bootstrap/manifests/cluster-secret-store.yaml) during bootstrap; see `docs/tutorial.md`). If the store is missing, `ExternalSecret` stays **Degraded** with `ClusterSecretStore ... not found`.
 
 Regenerate vendored dependency (if you bump the version in `Chart.yaml`):
 

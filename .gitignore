@@ -7,3 +7,5 @@ dist/
 !.env.example
 .DS_Store
 .secrets/
+spice-gitops-work/
+website/dist/

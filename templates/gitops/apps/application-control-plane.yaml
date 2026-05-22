@@ -13,8 +13,8 @@ spec:
     server: https://kubernetes.default.svc
     namespace: control-plane
   source:
-    repoURL: https://github.com/felipemm/spice-cdn.git
-    targetRevision: HEAD
+    repoURL: __GITOPS_REPO_HTTPS_URL__
+    targetRevision: __GITOPS_TARGET_REVISION__
     path: deploy/helm/control-plane
     helm:
       releaseName: control-plane

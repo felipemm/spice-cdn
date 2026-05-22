@@ -36,7 +36,7 @@ Throughout **Part A**, each step ends with **Validate**: commands to run and wha
    helm repo update
    helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
      -n ingress-nginx --create-namespace \
-     -f gitops/bootstrap/values-ingress-nginx.yaml
+     -f templates/gitops/bootstrap/values-ingress-nginx.yaml
    ```
 
    **Validate:**
@@ -49,13 +49,13 @@ Throughout **Part A**, each step ends with **Validate**: commands to run and wha
 
    Expect: ingress controller pod(s) **`Running`**, `curl` returns **`HTTP/1.1`** (often **404** from nginx with no matching `Ingress` — that is fine; **connection refused** means host port 80 is not wired to the controller).
 
-3. Install **Vault** (reference values enable a **dev-style** server suitable only for disposable labs; see comments in [`gitops/bootstrap/values-vault.yaml`](../gitops/bootstrap/values-vault.yaml)):
+3. Install **Vault** (reference values enable a **dev-style** server suitable only for disposable labs; see comments in [`templates/gitops/bootstrap/values-vault.yaml`](../templates/gitops/bootstrap/values-vault.yaml)):
 
    ```bash
    helm repo add hashicorp https://helm.releases.hashicorp.com
    helm repo update
    helm upgrade --install vault hashicorp/vault -n vault --create-namespace \
-     -f gitops/bootstrap/values-vault.yaml
+     -f templates/gitops/bootstrap/values-vault.yaml
    ```
 
    **Validate:**
@@ -75,7 +75,7 @@ Throughout **Part A**, each step ends with **Validate**: commands to run and wha
    helm repo update
    helm upgrade --install external-secrets external-secrets/external-secrets \
      -n external-secrets --create-namespace \
-     -f gitops/bootstrap/values-external-secrets.yaml
+     -f templates/gitops/bootstrap/values-external-secrets.yaml
    ```
 
    **Validate:**
@@ -86,9 +86,9 @@ Throughout **Part A**, each step ends with **Validate**: commands to run and wha
    kubectl get crd clustersecretstores.external-secrets.io
    ```
 
-   Expect: ESO pod(s) **`Running`**, CRD **`clustersecretstores.external-secrets.io`** exists with **`Established`** (if `kubectl get crd ...` returns **NotFound**, fix the Helm release: `helm status -n external-secrets external-secrets`, reinstall with `installCRDs: true` as in [`gitops/bootstrap/values-external-secrets.yaml`](../gitops/bootstrap/values-external-secrets.yaml)). Do **not** apply the `ClusterSecretStore` until this CRD exists.
+   Expect: ESO pod(s) **`Running`**, CRD **`clustersecretstores.external-secrets.io`** exists with **`Established`** (if `kubectl get crd ...` returns **NotFound**, fix the Helm release: `helm status -n external-secrets external-secrets`, reinstall with `installCRDs: true` as in [`templates/gitops/bootstrap/values-external-secrets.yaml`](../templates/gitops/bootstrap/values-external-secrets.yaml)). Do **not** apply the `ClusterSecretStore` until this CRD exists.
 
-5. **Vault token for ESO** (lab pattern): External Secrets needs a **Kubernetes Secret** that contains the Vault token. The committed [`ClusterSecretStore`](../gitops/bootstrap/manifests/cluster-secret-store.yaml) points at:
+5. **Vault token for ESO** (lab pattern): External Secrets needs a **Kubernetes Secret** that contains the Vault token. The committed [`ClusterSecretStore`](../templates/gitops/bootstrap/manifests/cluster-secret-store.yaml) points at:
 
    - **Secret name:** `vault-eso-token`
    - **Namespace:** `external-secrets` (same namespace where you installed the ESO Helm release in step 4)
@@ -126,7 +126,7 @@ Throughout **Part A**, each step ends with **Validate**: commands to run and wha
 
    Expect: byte count **greater than zero** (non-empty token), decoded value matches your Vault root token (avoid shared screens / logs in real environments).
 
-6. **KV mount** (before the ClusterSecretStore): enable KV v2 at path `secret` so it matches [`cluster-secret-store.yaml`](../gitops/bootstrap/manifests/cluster-secret-store.yaml) (`spec.provider.vault.path: secret`). Example:
+6. **KV mount** (before the ClusterSecretStore): enable KV v2 at path `secret` so it matches [`cluster-secret-store.yaml`](../templates/gitops/bootstrap/manifests/cluster-secret-store.yaml) (`spec.provider.vault.path: secret`). Example:
 
    ```bash
    kubectl -n vault exec -it vault-0 -- vault secrets enable -path=secret kv-v2
@@ -145,7 +145,7 @@ Throughout **Part A**, each step ends with **Validate**: commands to run and wha
 7. Apply the **ClusterSecretStore** (edit `server` in the manifest if your Vault Service differs), then confirm it becomes **Ready**:
 
    ```bash
-   kubectl apply -f gitops/bootstrap/manifests/cluster-secret-store.yaml
+   kubectl apply -f templates/gitops/bootstrap/manifests/cluster-secret-store.yaml
    kubectl get clustersecretstore vault-backend
    ```
 
@@ -174,7 +174,7 @@ Throughout **Part A**, each step ends with **Validate**: commands to run and wha
    helm repo add argo https://argoproj.github.io/argo-helm
    helm repo update
    helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace \
-     -f gitops/bootstrap/values-argocd.yaml
+     -f templates/gitops/bootstrap/values-argocd.yaml
    ```
 
    **Validate:**
@@ -196,12 +196,12 @@ Throughout **Part A**, each step ends with **Validate**: commands to run and wha
 
    The decoded string has no trailing newline. After you change the admin password or delete `argocd-initial-admin-secret`, this Secret is gone and you must use whatever credentials you configured instead.
 
-   Expect: `argocd-server` (and related) pods **`Running`**, the **`kubectl ... get secret argocd-initial-admin-secret`** line succeeds (Secret present), password length **> 0** bytes from the **`wc -c`** line (unless you already removed the Secret after rotating the admin user), an **Ingress** for Argo CD (see [`values-argocd.yaml`](../gitops/bootstrap/values-argocd.yaml) `server.ingress`), `curl` returns **`HTTP/1.1`** with **`302`** or **`200`** (not connection refused). Open **`http://argocd.127.0.0.1.nip.io/`** in a browser if you use the default hostname, then sign in as **`admin`** with the password from the command above.
+   Expect: `argocd-server` (and related) pods **`Running`**, the **`kubectl ... get secret argocd-initial-admin-secret`** line succeeds (Secret present), password length **> 0** bytes from the **`wc -c`** line (unless you already removed the Secret after rotating the admin user), an **Ingress** for Argo CD (see [`values-argocd.yaml`](../templates/gitops/bootstrap/values-argocd.yaml) `server.ingress`), `curl` returns **`HTTP/1.1`** with **`302`** or **`200`** (not connection refused). Open **`http://argocd.127.0.0.1.nip.io/`** in a browser if you use the default hostname, then sign in as **`admin`** with the password from the command above.
 
-9. **Wire Argo CD to GitHub**: create a `repository` Secret in `argocd` (see [`gitops/bootstrap/manifests/github-repo-secret.example.yaml`](../gitops/bootstrap/manifests/github-repo-secret.example.yaml)). Replace org/repo and PAT, then:
+9. **Wire Argo CD to GitHub**: create a `repository` Secret in `argocd` (see [`templates/gitops/bootstrap/manifests/github-repo-secret.example.yaml`](../templates/gitops/bootstrap/manifests/github-repo-secret.example.yaml)). Replace org/repo and PAT, then:
 
    ```bash
-   kubectl apply -f gitops/bootstrap/manifests/github-repo-secret.example.yaml
+   kubectl apply -f templates/gitops/bootstrap/manifests/github-repo-secret.example.yaml
    ```
 
    **Validate:**
@@ -215,31 +215,31 @@ Throughout **Part A**, each step ends with **Validate**: commands to run and wha
 
 10. **Replace placeholders** in GitOps manifests with your GitHub coordinates:
 
-    - [`gitops/apps/app-project.yaml`](../gitops/apps/app-project.yaml)
-    - [`gitops/apps/applicationset-spice-instances.yaml`](../gitops/apps/applicationset-spice-instances.yaml)
-    - [`gitops/apps/application-control-plane.yaml`](../gitops/apps/application-control-plane.yaml)
-    - [`gitops/bootstrap/manifests/application-root.yaml`](../gitops/bootstrap/manifests/application-root.yaml)
+    - [`templates/gitops/apps/app-project.yaml`](../templates/gitops/apps/app-project.yaml)
+    - [`templates/gitops/apps/applicationset-spice-instances.yaml`](../templates/gitops/apps/applicationset-spice-instances.yaml)
+    - [`templates/gitops/apps/application-control-plane.yaml`](../templates/gitops/apps/application-control-plane.yaml)
+    - [`templates/gitops/bootstrap/manifests/application-root.yaml`](../templates/gitops/bootstrap/manifests/application-root.yaml)
 
     Commit and push these changes to your GitHub `main` branch.
 
     **Validate (local repo):**
 
     ```bash
-    if grep -rF 'CHANGE_ME' gitops/apps/ gitops/bootstrap/manifests/application-root.yaml 2>/dev/null; then
-      echo 'ERROR: replace CHANGE_ME placeholders'
+    if grep -rE '__GITOPS_|CHANGE_ME' templates/gitops/apps/ templates/gitops/bootstrap/manifests/application-root.yaml 2>/dev/null; then
+      echo 'ERROR: replace template placeholders (or run scripts/install.sh to materialize)'
       exit 1
     else
-      echo 'OK: no CHANGE_ME in listed paths'
+      echo 'OK: no unresolved placeholders in listed paths'
     fi
     git status
     ```
 
-    Expect: **`OK: no CHANGE_ME...`**, then `git status` shows a clean tree after commit (or only commits you still intend to push).
+    Expect: **`OK: no unresolved placeholders...`**, then `git status` shows a clean tree after commit (or only commits you still intend to push).
 
-11. **Bootstrap the root Application** (one-time; this file is intentionally **outside** `gitops/apps/` to avoid self-recursion):
+11. **Bootstrap the root Application** (one-time; this file is intentionally **outside** `templates/gitops/apps/` to avoid self-recursion):
 
     ```bash
-    kubectl apply -f gitops/bootstrap/manifests/application-root.yaml
+    kubectl apply -f templates/gitops/bootstrap/manifests/application-root.yaml
     ```
 
     **Validate:**
@@ -250,7 +250,7 @@ Throughout **Part A**, each step ends with **Validate**: commands to run and wha
     kubectl -n argocd wait --for=jsonpath='{.status.health.status}'=Healthy application/platform-gitops --timeout=600s
     ```
 
-    Expect: **`platform-gitops`** exists; **Sync** moves toward **Synced** and **Health** toward **Healthy** as child `Application`s under [`gitops/apps/`](../gitops/apps/) reconcile (first sync can take several minutes). If children stay **Unknown** for Git, re-check the repository Secret (step 9) and repo URLs in manifests.
+    Expect: **`platform-gitops`** exists; **Sync** moves toward **Synced** and **Health** toward **Healthy** as child `Application`s under [`templates/gitops/apps/`](../templates/gitops/apps/) reconcile (first sync can take several minutes). If children stay **Unknown** for Git, re-check the repository Secret (step 9) and repo URLs in manifests.
 
     > **Note:** `kubectl wait` may time out while children are still syncing; re-run `kubectl -n argocd get applications` until the **control-plane** and instance apps look healthy, or use the Argo CD UI (**Optional: break-glass** below).
 
@@ -304,15 +304,17 @@ Create the `control-plane` namespace Secret expected by [`deploy/helm/control-pl
 kubectl create namespace control-plane --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl -n control-plane create secret generic control-plane-secrets \
-  --from-literal=github_token='YOUR_GITHUB_TOKEN' \
+  --from-literal=gitops_token='YOUR_GITOPS_REPO_PAT' \
   --from-literal=vault_token='YOUR_VAULT_TOKEN' \
   --from-literal=admin_api_key='YOUR_LONG_RANDOM_ADMIN_KEY'
 ```
 
+The PAT must allow **contents:write** on your **GitOps** repository (where `instances/*` live). Legacy installs may still use the key name `github_token`; the chart default is now `gitops_token` (see `secrets.gitopsTokenSecretKey` in [`deploy/helm/control-plane/values.yaml`](../deploy/helm/control-plane/values.yaml)).
+
 **Validate:**
 
 ```bash
-for k in github_token vault_token admin_api_key; do
+for k in gitops_token vault_token admin_api_key; do
   echo -n "$k: "
   kubectl -n control-plane get secret control-plane-secrets -o jsonpath="{.data.$k}" | wc -c
 done
@@ -322,7 +324,7 @@ Expect: each key reports a **non-zero** base64 payload size (typically tens of c
 
 Edit [`deploy/helm/control-plane/values.yaml`](../deploy/helm/control-plane/values.yaml) (or use `--set` when installing) so that:
 
-- `env.githubOwner`, `env.githubRepo`, `env.githubBranch` match your repository.
+- `env.gitopsRepoOwner`, `env.gitopsRepoName`, `env.gitopsRepoBranch` match your **GitOps** repository (not the product repo).
 - `ingress.host` is a hostname under `127.0.0.1.nip.io` (or your DNS) pointing at `127.0.0.1` where Kind maps ports 80/443.
 
 Argo CD will deploy the chart when the `control-plane` `Application` syncs from Git. The workload image defaults to **GHCR**; after the first successful run of the **Control plane image** workflow, `image.tag` in Git is the commit SHA that built that image so each release rolls out cleanly.
@@ -360,17 +362,17 @@ Expect: JSON **`{"ok":true,...}`** from `/api/health`, and **`HTTP/1.1`** from `
 
 ### Cost governance (Kind as EKS)
 
-- **Budgets**: defaults and per-slug caps live in [`deploy/helm/control-plane/budgets.default.yaml`](../deploy/helm/control-plane/budgets.default.yaml) (mounted into the pod as `/config/budgets.yaml`). Mirror for docs in [`gitops/cost/budgets.yaml`](../gitops/cost/budgets.yaml). Tune `maxInstancesPerSlug` / optional `maxEstimatedMonthlyUsdPerSlug`, sync the `control-plane` app, and restart if needed.
+- **Budgets**: defaults and per-slug caps live in [`deploy/helm/control-plane/budgets.default.yaml`](../deploy/helm/control-plane/budgets.default.yaml) (mounted into the pod as `/config/budgets.yaml`). Mirror for docs in [`templates/gitops/cost/budgets.yaml`](../templates/gitops/cost/budgets.yaml). Tune `maxInstancesPerSlug` / optional `maxEstimatedMonthlyUsdPerSlug`, sync the `control-plane` app, and restart if needed.
 - **Declared cost estimates**: the control plane uses configurable **vCPU / GiB-month** factors. Set `cost.pricingJson` for explicit numbers, or **`cost.nodeInstanceType`** (Helm → **`COST_NODE_INSTANCE_TYPE`**) to pick a built-in EC2 reference (see [`apps/control-plane/src/lib/aws-pricing.ts`](../apps/control-plane/src/lib/aws-pricing.ts)). **`AWS_REGION`** is echoed in the cost summary for “Kind as EKS” alignment with Cost Explorer.
 - **Remote MCP (FastMCP)**: **sidecar** on the control-plane pod serves **Streamable HTTP** at **`https://<ingress.host>/mcp`** (see [`apps/control-plane-mcp/README.md`](../apps/control-plane-mcp/README.md)). It is **enabled by default** in [`deploy/helm/control-plane/values.yaml`](../deploy/helm/control-plane/values.yaml) (`mcp.enabled`); set **`mcp.enabled: false`** to turn it off. Run the [**Control plane MCP image**](../.github/workflows/control-plane-mcp-image.yml) workflow (or merge a change under `apps/control-plane-mcp/`) so **`ghcr.io/<owner>/<repo>/control-plane-mcp`** exists before the pod can pull the sidecar. Optionally wire **`mcp.auth.*`** for `Authorization: Bearer`, sync Argo, then point Cursor / Claude at that URL.
-- **OpenCost** (optional): see **Optional: Prometheus + OpenCost (Kind)** below. After OpenCost runs, set **`cost.opencostBaseUrl`** on the control-plane chart (in-cluster API, typically `http://opencost.opencost.svc.cluster.local:9003` when the OpenCost release name is **`opencost`**). The OpenCost **UI** can be exposed on port 80 via ingress; see [`gitops/addons/opencost/README.md`](../gitops/addons/opencost/README.md).
+- **OpenCost** (optional): see **Optional: Prometheus + OpenCost (Kind)** below. After OpenCost runs, set **`cost.opencostBaseUrl`** on the control-plane chart (in-cluster API, typically `http://opencost.opencost.svc.cluster.local:9003` when the OpenCost release name is **`opencost`**). The OpenCost **UI** can be exposed on port 80 via ingress; see [`templates/gitops/addons/opencost/README.md`](../templates/gitops/addons/opencost/README.md).
 - **AWS Cost Explorer** (optional, real AWS only): attach an IAM role to the control-plane `ServiceAccount` (**IRSA**) using [`docs/iam-control-plane-cost-explorer.json`](../docs/iam-control-plane-cost-explorer.json), set `serviceAccount.annotations.eks.amazonaws.com/role-arn`, and set `cost.awsCostExplorerEnabled: "true"`. The API returns **account-level** last-30d unblended cost (not per slug). Skip on Kind unless you intentionally wire cloud credentials.
-- **Kyverno** (optional admission): after [Kyverno](https://kyverno.io/) is installed, apply [`gitops/bootstrap/manifests/kyverno-require-owner-layer-slug.yaml`](../gitops/bootstrap/manifests/kyverno-require-owner-layer-slug.yaml) so Pods in **`spice-instances`** must carry label **`owner-layer-slug`**.
-- **CI**: PRs touching `gitops/instances/**/values.yaml` run [`.github/workflows/validate-instances.yml`](../.github/workflows/validate-instances.yml) (`helm template` per instance).
+- **Kyverno** (optional admission): after [Kyverno](https://kyverno.io/) is installed, apply [`templates/gitops/bootstrap/manifests/kyverno-require-owner-layer-slug.yaml`](../templates/gitops/bootstrap/manifests/kyverno-require-owner-layer-slug.yaml) so Pods in **`spice-instances`** must carry label **`owner-layer-slug`**.
+- **CI**: PRs touching `examples/instances/**/values.yaml` run [`.github/workflows/validate-instances.yml`](../.github/workflows/validate-instances.yml) (`helm template` per instance).
 
 ### Optional: kube-prometheus-stack + OpenCost (Kind)
 
-OpenCost (see [`gitops/addons/opencost/values-kind.yaml`](../gitops/addons/opencost/values-kind.yaml)) queries in-cluster Prometheus at **`http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090`** (Helm release **`kps`**, namespace **`monitoring`**). If that Service does not exist, OpenCost logs show **`no such host`** / **`Prometheus communication error`** and the UI stays empty or degraded. Install **kube-prometheus-stack first**, then **OpenCost**, then point the control plane at OpenCost.
+OpenCost (see [`templates/gitops/addons/opencost/values-kind.yaml`](../templates/gitops/addons/opencost/values-kind.yaml)) queries in-cluster Prometheus at **`http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090`** (Helm release **`kps`**, namespace **`monitoring`**). If that Service does not exist, OpenCost logs show **`no such host`** / **`Prometheus communication error`** and the UI stays empty or degraded. Install **kube-prometheus-stack first**, then **OpenCost**, then point the control plane at OpenCost.
 
 1. **Add Helm repos** (once per machine):
 
@@ -380,13 +382,13 @@ OpenCost (see [`gitops/addons/opencost/values-kind.yaml`](../gitops/addons/openc
    helm repo update
    ```
 
-2. **Install kube-prometheus-stack** (Prometheus Operator + Prometheus + **Grafana**; Kind values — see [`gitops/addons/kube-prometheus-stack/README.md`](../gitops/addons/kube-prometheus-stack/README.md)):
+2. **Install kube-prometheus-stack** (Prometheus Operator + Prometheus + **Grafana**; Kind values — see [`templates/gitops/addons/kube-prometheus-stack/README.md`](../templates/gitops/addons/kube-prometheus-stack/README.md)):
 
    ```bash
    helm upgrade --install kps prometheus-community/kube-prometheus-stack \
      --version 85.2.2 \
      -n monitoring --create-namespace \
-     -f gitops/addons/kube-prometheus-stack/values-kind.yaml
+     -f templates/gitops/addons/kube-prometheus-stack/values-kind.yaml
    kubectl -n monitoring rollout status deploy/kps-kube-prometheus-stack-operator --timeout=300s
    kubectl -n monitoring rollout status statefulset/prometheus-kps-kube-prometheus-stack-prometheus --timeout=300s
    kubectl -n monitoring rollout status deploy/kps-grafana --timeout=300s
@@ -400,11 +402,11 @@ OpenCost (see [`gitops/addons/opencost/values-kind.yaml`](../gitops/addons/openc
 
    Expect: Service **`kps-kube-prometheus-stack-prometheus`** in namespace **`monitoring`**, port **9090**, **`CLUSTER-IP`** assigned. Grafana ingress (same tutorial ingress-nginx on host port **80**): **`http://grafana.127.0.0.1.nip.io/`** (login **`admin` / `admin`** unless you changed it).
 
-3. **Install OpenCost** (internal Prometheus client points at `kps` + **ingress-nginx** UI host `opencost.127.0.0.1.nip.io` — see [`gitops/addons/opencost/README.md`](../gitops/addons/opencost/README.md)):
+3. **Install OpenCost** (internal Prometheus client points at `kps` + **ingress-nginx** UI host `opencost.127.0.0.1.nip.io` — see [`templates/gitops/addons/opencost/README.md`](../templates/gitops/addons/opencost/README.md)):
 
    ```bash
    helm upgrade --install opencost opencost/opencost -n opencost --create-namespace \
-     --version 1.33.1 -f gitops/addons/opencost/values-kind.yaml
+     --version 1.33.1 -f templates/gitops/addons/opencost/values-kind.yaml
    kubectl -n opencost rollout status deploy/opencost --timeout=300s
    ```
 
@@ -430,17 +432,17 @@ OpenCost (see [`gitops/addons/opencost/values-kind.yaml`](../gitops/addons/openc
 |---------|------------------|
 | OpenCost logs **`lookup kps-kube-prometheus-stack-prometheus.monitoring... no such host`** or empty UI | OpenCost expects Prometheus from **kube-prometheus-stack** (`kps` in `monitoring`). Install the stack per **Optional: kube-prometheus-stack + OpenCost (Kind)** above, then `kubectl -n opencost rollout restart deploy/opencost`. |
 | OpenCost warnings about **`kubecost_pod_network_egress_bytes_total`** (or other `kubecost_*` metrics) | Normal without Kubecost exporters; core allocation can still work from standard kubelet / cAdvisor / kube-state-metrics scrapes. |
-| `403` from GitHub API | Token scopes, `GITHUB_OWNER` / `GITHUB_REPO`, branch name, and whether branch protection blocks the automation user. |
+| `403` from GitHub API | Token scopes, `GITOPS_REPO_OWNER` / `GITOPS_REPO_NAME` (or legacy `GITHUB_*`), branch name, and whether branch protection blocks the automation user on the **GitOps** repo. |
 | Argo `Unknown` / sync errors | Repo Secret in `argocd` namespace, placeholder URLs still present, or chart path `charts/spice-instance` / `valueFiles` path. |
 | Vault read/write errors | `VAULT_TOKEN` in the control-plane Secret, KV v2 mount path, and Vault policies allowing the token to read/write `spice/instances/*`. |
 | Control plane API returns **`fetch failed`** when saving instance secrets | The app calls Vault from inside the pod using **`VAULT_ADDR`**. Use the Vault **Service** DNS (default in chart: `http://vault.vault.svc.cluster.local:8200`). Hostnames like `vault-0.vault.svc.cluster.local` are usually wrong and fail DNS. Set `env.vaultAddr` in [`deploy/helm/control-plane/values.yaml`](../deploy/helm/control-plane/values.yaml), sync the `control-plane` app, and restart the deployment if needed. |
-| ClusterSecretStore **InvalidProviderConfig** / `READY=False` | Run `kubectl describe clustersecretstore vault-backend` and read **Events** / status (connection errors, 403, “could not get secret”, wrong key). Confirm `kubectl -n external-secrets get secret vault-eso-token` and the data key is **`token`**. Confirm Vault is up (`kubectl -n vault get pods`) and the KV v2 mount exists at path **`secret`** (tutorial step 6). Fix the issue, then `kubectl delete clustersecretstore vault-backend --ignore-not-found` and `kubectl apply -f gitops/bootstrap/manifests/cluster-secret-store.yaml` so the controller re-validates. |
-| ExternalSecret **Degraded** — `ClusterSecretStore "vault-backend" not found` | The store is **cluster-scoped** and must be applied once (after ESO CRDs and the `vault-eso-token` Secret). Run `kubectl apply -f gitops/bootstrap/manifests/cluster-secret-store.yaml` and `kubectl get clustersecretstore vault-backend`. If you renamed the store, set `externalSecret.clusterSecretStoreName` in the instance `values.yaml` to match. |
+| ClusterSecretStore **InvalidProviderConfig** / `READY=False` | Run `kubectl describe clustersecretstore vault-backend` and read **Events** / status (connection errors, 403, “could not get secret”, wrong key). Confirm `kubectl -n external-secrets get secret vault-eso-token` and the data key is **`token`**. Confirm Vault is up (`kubectl -n vault get pods`) and the KV v2 mount exists at path **`secret`** (tutorial step 6). Fix the issue, then `kubectl delete clustersecretstore vault-backend --ignore-not-found` and `kubectl apply -f templates/gitops/bootstrap/manifests/cluster-secret-store.yaml` so the controller re-validates. |
+| ExternalSecret **Degraded** — `ClusterSecretStore "vault-backend" not found` | The store is **cluster-scoped** and must be applied once (after ESO CRDs and the `vault-eso-token` Secret). Run `kubectl apply -f templates/gitops/bootstrap/manifests/cluster-secret-store.yaml` and `kubectl get clustersecretstore vault-backend`. If you renamed the store, set `externalSecret.clusterSecretStoreName` in the instance `values.yaml` to match. |
 | ExternalSecret not syncing | `ClusterSecretStore` status, `vault-eso-token` Secret, and `externalSecret.vaultPath` in instance `values.yaml`. |
-| `ClusterRole is not permitted in project spice-platform` | The `AppProject` **`clusterResourceWhitelist`** must allow RBAC objects installed by the control-plane chart. Update [`gitops/apps/app-project.yaml`](../gitops/apps/app-project.yaml) to include `ClusterRole` and `ClusterRoleBinding` for group `rbac.authorization.k8s.io`, commit, push, and sync. |
-| `Resource not found in cluster: ... ClusterRoleBinding` / `ClusterRole` | Argo is comparing live state before a successful sync, or the UI is stale after fixing `AppProject`. Apply the updated [`gitops/apps/app-project.yaml`](../gitops/apps/app-project.yaml) if needed, then **Hard Refresh** and **Sync** the `control-plane` Application. List cluster RBAC and look for the release name plus `-gitops` (for example `control-plane-gitops` when `helm.releaseName` is `control-plane`). |
-| `control-plane.*.nip.io` does not load (connection refused, timeout) | Kind maps **host** `127.0.0.1:80` to the **node** port 80. Bootstrap values must set **`controller.hostPort.enabled: true`** (see [`gitops/bootstrap/values-ingress-nginx.yaml`](../gitops/bootstrap/values-ingress-nginx.yaml)); otherwise the Service uses a high `NodePort` and nothing listens on 80. Re-run the Helm upgrade for ingress-nginx, wait for the controller pod to be Ready, then try `curl -sI -H "Host: control-plane.127.0.0.1.nip.io" http://127.0.0.1/`. On macOS, another process using port 80 can block Kind; check with `sudo lsof -iTCP:80 -sTCP:LISTEN`. |
-| `argocd.*.nip.io` does not load | Same ingress-nginx / Kind port **80** checklist as the row above. Confirm the Argo CD Ingress exists: `kubectl -n argocd get ingress`. Re-apply values with `helm upgrade --install argocd ... -f gitops/bootstrap/values-argocd.yaml` if `server.ingress.enabled` was still false. |
+| `ClusterRole is not permitted in project spice-platform` | The `AppProject` **`clusterResourceWhitelist`** must allow RBAC objects installed by the control-plane chart. Update [`templates/gitops/apps/app-project.yaml`](../templates/gitops/apps/app-project.yaml) to include `ClusterRole` and `ClusterRoleBinding` for group `rbac.authorization.k8s.io`, commit, push, and sync. |
+| `Resource not found in cluster: ... ClusterRoleBinding` / `ClusterRole` | Argo is comparing live state before a successful sync, or the UI is stale after fixing `AppProject`. Apply the updated [`templates/gitops/apps/app-project.yaml`](../templates/gitops/apps/app-project.yaml) if needed, then **Hard Refresh** and **Sync** the `control-plane` Application. List cluster RBAC and look for the release name plus `-gitops` (for example `control-plane-gitops` when `helm.releaseName` is `control-plane`). |
+| `control-plane.*.nip.io` does not load (connection refused, timeout) | Kind maps **host** `127.0.0.1:80` to the **node** port 80. Bootstrap values must set **`controller.hostPort.enabled: true`** (see [`templates/gitops/bootstrap/values-ingress-nginx.yaml`](../templates/gitops/bootstrap/values-ingress-nginx.yaml)); otherwise the Service uses a high `NodePort` and nothing listens on 80. Re-run the Helm upgrade for ingress-nginx, wait for the controller pod to be Ready, then try `curl -sI -H "Host: control-plane.127.0.0.1.nip.io" http://127.0.0.1/`. On macOS, another process using port 80 can block Kind; check with `sudo lsof -iTCP:80 -sTCP:LISTEN`. |
+| `argocd.*.nip.io` does not load | Same ingress-nginx / Kind port **80** checklist as the row above. Confirm the Argo CD Ingress exists: `kubectl -n argocd get ingress`. Re-apply values with `helm upgrade --install argocd ... -f templates/gitops/bootstrap/values-argocd.yaml` if `server.ingress.enabled` was still false. |
 | `ImagePullBackOff` / **`Failed to pull image`** `ghcr.io/.../control-plane` | Confirm the **Control plane image** workflow has run and the tag in Git matches GHCR. Kind needs outbound access to **ghcr.io**. For a **private** package, add a docker-registry pull secret in `control-plane` and set **`imagePullSecrets`** in [`deploy/helm/control-plane/values.yaml`](../deploy/helm/control-plane/values.yaml). For **air-gapped Kind**, use Part B optional **`make image-load-local`** and override Helm `image.repository` / `image.tag`. |
 | `ImagePullBackOff` for **`.../control-plane-mcp`** | The chart defaults **`mcp.enabled: true`**; the sidecar image must exist in GHCR. Run the [**Control plane MCP image**](../.github/workflows/control-plane-mcp-image.yml) workflow (or temporarily set **`mcp.enabled: false`** until the image is available). Same pull-secret / public rules as the Next.js image. |
 | **`no match for platform in manifest`** | The image manifest did not include your node’s CPU (common: **linux/arm64** Kind on Apple Silicon vs an **amd64-only** CI build). Re-run the **Control plane image** workflow after [`.github/workflows/control-plane-image.yml`](../.github/workflows/control-plane-image.yml) publishes **multi-arch** (`linux/amd64` + `linux/arm64`), then sync Argo / restart the Deployment. |
@@ -450,7 +452,7 @@ OpenCost (see [`gitops/addons/opencost/values-kind.yaml`](../gitops/addons/openc
 
 ## Optional: break-glass
 
-- Prefer the Ingress URL **`http://argocd.127.0.0.1.nip.io/`** (see [`gitops/bootstrap/values-argocd.yaml`](../gitops/bootstrap/values-argocd.yaml)); it stays available whenever ingress-nginx and Argo CD are running.
+- Prefer the Ingress URL **`http://argocd.127.0.0.1.nip.io/`** (see [`templates/gitops/bootstrap/values-argocd.yaml`](../templates/gitops/bootstrap/values-argocd.yaml)); it stays available whenever ingress-nginx and Argo CD are running.
 - If the Ingress is broken or you are off-cluster: `kubectl -n argocd port-forward svc/argocd-server 8080:80` (HTTP service port when `server.insecure` is enabled).
 - Never rely on port-forward for routine operations if you want a strict control-plane-only workflow.
 
@@ -461,4 +463,4 @@ OpenCost (see [`gitops/addons/opencost/values-kind.yaml`](../gitops/addons/openc
 - [Spice Helm — Kubernetes](https://spiceai.org/docs/deployment/kubernetes)
 - [Argo CD ApplicationSet](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/)
 - [External Secrets — Vault](https://external-secrets.io/latest/provider/hashicorp-vault/)
-- [OpenCost addon](../gitops/addons/opencost/README.md) and [kube-prometheus-stack addon](../gitops/addons/kube-prometheus-stack/README.md) (Kind cost stack + Grafana)
+- [OpenCost addon](../templates/gitops/addons/opencost/README.md) and [kube-prometheus-stack addon](../templates/gitops/addons/kube-prometheus-stack/README.md) (Kind cost stack + Grafana)

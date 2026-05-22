@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { assertGithubConfigured } from "@/lib/config";
+import { assertGitopsRepoConfigured } from "@/lib/config";
 import {
   createInstance,
   createOctokit,
@@ -18,7 +18,7 @@ function budgetsPath(): string {
 
 async function declaredMonthlyForSlug(slug: string): Promise<number> {
   const octokit = createOctokit();
-  const { owner, repo, branch } = assertGithubConfigured();
+  const { owner, repo, branch } = assertGitopsRepoConfigured();
   const names = await listInstanceNames();
   const pricing = loadPricingFactorsFromEnv();
   let sum = 0;

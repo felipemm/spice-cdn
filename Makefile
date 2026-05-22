@@ -1,4 +1,4 @@
-.PHONY: help kind-create kind-delete image-build image-load-local image-load
+.PHONY: help kind-create kind-delete image-build image-load-local image-load install-help
 
 help:
 	@echo "Targets:"
@@ -7,6 +7,10 @@ help:
 	@echo "  image-build        - docker build local tag spice-control-plane:latest (optional dev)"
 	@echo "  image-load-local   - kind load that local image (only if you override Helm away from GHCR)"
 	@echo "  image-load         - alias for image-load-local"
+	@echo "  install-help       - scripts/install.sh --help"
+
+install-help:
+	@./scripts/install.sh --help
 
 CLUSTER_NAME ?= spice-gitops
 

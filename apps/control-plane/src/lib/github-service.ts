@@ -1,6 +1,6 @@
 import { Octokit } from "@octokit/rest";
 import YAML from "yaml";
-import { assertGithubConfigured } from "@/lib/config";
+import { assertGitopsRepoConfigured } from "@/lib/config";
 
 const instancesPrefix = "instances";
 
@@ -29,13 +29,13 @@ export function spicePublicUrlFromValuesYaml(yamlText: string): string | null {
 }
 
 export function createOctokit() {
-  const { token } = assertGithubConfigured();
+  const { token } = assertGitopsRepoConfigured();
   return new Octokit({ auth: token });
 }
 
 export async function listInstanceNames(): Promise<string[]> {
   const octokit = createOctokit();
-  const { owner, repo, branch } = assertGithubConfigured();
+  const { owner, repo, branch } = assertGitopsRepoConfigured();
   try {
     const res = await octokit.repos.getContent({
       owner,
@@ -76,7 +76,7 @@ export async function listInstancesWithUrls(): Promise<InstanceListEntry[]> {
 
 export async function getValuesYaml(name: string): Promise<{ content: string; sha: string }> {
   const octokit = createOctokit();
-  const { owner, repo, branch } = assertGithubConfigured();
+  const { owner, repo, branch } = assertGitopsRepoConfigured();
   const path = `${instancesPrefix}/${name}/values.yaml`;
   const res = await octokit.repos.getContent({ owner, repo, path, ref: branch });
   if (Array.isArray(res.data) || res.data.type !== "file") {
@@ -96,7 +96,7 @@ export async function putValuesYaml(
   message: string,
 ) {
   const octokit = createOctokit();
-  const { owner, repo, branch } = assertGithubConfigured();
+  const { owner, repo, branch } = assertGitopsRepoConfigured();
   const path = `${instancesPrefix}/${name}/values.yaml`;
   const contentBase64 = Buffer.from(content, "utf8").toString("base64");
   if (sha) {
@@ -123,7 +123,7 @@ export async function putValuesYaml(
 
 export async function createInstance(name: string, initialYaml: string) {
   const octokit = createOctokit();
-  const { owner, repo, branch } = assertGithubConfigured();
+  const { owner, repo, branch } = assertGitopsRepoConfigured();
   const path = `${instancesPrefix}/${name}/values.yaml`;
   await octokit.repos.createOrUpdateFileContents({
     owner,
@@ -137,7 +137,7 @@ export async function createInstance(name: string, initialYaml: string) {
 
 export async function deleteInstance(name: string) {
   const octokit = createOctokit();
-  const { owner, repo, branch } = assertGithubConfigured();
+  const { owner, repo, branch } = assertGitopsRepoConfigured();
   const dirPath = `${instancesPrefix}/${name}`;
   const res = await octokit.repos.getContent({ owner, repo, path: dirPath, ref: branch });
   if (!Array.isArray(res.data)) {

@@ -1,0 +1,2 @@
+# Pinned platform (product) release used to build this GitOps tree. Bump with install.sh --upgrade or manually.
+platformRelease: __PLATFORM_RELEASE__
