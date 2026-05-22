@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -44,3 +45,22 @@ jobs:
             spice-platform-*.tar.gz
             spice-platform-*.tar.gz.sha256
           generate_release_notes: true
+
+  # Pages cannot deploy from tag refs if the github-pages environment only allows "main".
+  # Dispatch the Pages workflow on main with the release tag embedded in public/install.sh.
+  dispatch-pages:
+    needs: bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Pages workflow on main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          curl -fsSL -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${REPO}/actions/workflows/pages.yml/dispatches" \
+            -d "$(jq -n --arg t "$TAG" '{ref:"main",inputs:{spice_release:$t}}')"
