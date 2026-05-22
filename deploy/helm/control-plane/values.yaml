@@ -77,3 +77,25 @@ cost:
   nodeInstanceType: m6i.large
   # Optional override for declare-based estimates: { "usdPerCpuCoreMonth": 35, "usdPerGiBMonth": 8.76 }
   pricingJson: null
+
+# FastMCP Streamable HTTP sidecar — same pod as the Next.js app, calls loopback.
+# Remote MCP URL (with ingress): https://<ingress.host>/mcp
+# Default: enabled. Build/push image via .github/workflows/control-plane-mcp-image.yml (apps/control-plane-mcp);
+# set mcp.enabled: false to disable the sidecar.
+mcp:
+  enabled: true
+  port: 8000
+  image:
+    repository: ghcr.io/felipemm/spice-cdn/control-plane-mcp
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+  # Optional: require Authorization: Bearer <value> on /mcp (create a Secret key and reference it here).
+  auth:
+    serverApiKeySecretName: ""
+    serverApiKeySecretKey: mcp_server_api_key

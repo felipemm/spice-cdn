@@ -362,14 +362,15 @@ Expect: JSON **`{"ok":true,...}`** from `/api/health`, and **`HTTP/1.1`** from `
 
 - **Budgets**: defaults and per-slug caps live in [`deploy/helm/control-plane/budgets.default.yaml`](../deploy/helm/control-plane/budgets.default.yaml) (mounted into the pod as `/config/budgets.yaml`). Mirror for docs in [`gitops/cost/budgets.yaml`](../gitops/cost/budgets.yaml). Tune `maxInstancesPerSlug` / optional `maxEstimatedMonthlyUsdPerSlug`, sync the `control-plane` app, and restart if needed.
 - **Declared cost estimates**: the control plane uses configurable **vCPU / GiB-month** factors. Set `cost.pricingJson` for explicit numbers, or **`cost.nodeInstanceType`** (Helm → **`COST_NODE_INSTANCE_TYPE`**) to pick a built-in EC2 reference (see [`apps/control-plane/src/lib/aws-pricing.ts`](../apps/control-plane/src/lib/aws-pricing.ts)). **`AWS_REGION`** is echoed in the cost summary for “Kind as EKS” alignment with Cost Explorer.
+- **Remote MCP (FastMCP)**: **sidecar** on the control-plane pod serves **Streamable HTTP** at **`https://<ingress.host>/mcp`** (see [`apps/control-plane-mcp/README.md`](../apps/control-plane-mcp/README.md)). It is **enabled by default** in [`deploy/helm/control-plane/values.yaml`](../deploy/helm/control-plane/values.yaml) (`mcp.enabled`); set **`mcp.enabled: false`** to turn it off. Run the [**Control plane MCP image**](../.github/workflows/control-plane-mcp-image.yml) workflow (or merge a change under `apps/control-plane-mcp/`) so **`ghcr.io/<owner>/<repo>/control-plane-mcp`** exists before the pod can pull the sidecar. Optionally wire **`mcp.auth.*`** for `Authorization: Bearer`, sync Argo, then point Cursor / Claude at that URL.
 - **OpenCost** (optional): see **Optional: Prometheus + OpenCost (Kind)** below. After OpenCost runs, set **`cost.opencostBaseUrl`** on the control-plane chart (in-cluster API, typically `http://opencost.opencost.svc.cluster.local:9003` when the OpenCost release name is **`opencost`**). The OpenCost **UI** can be exposed on port 80 via ingress; see [`gitops/addons/opencost/README.md`](../gitops/addons/opencost/README.md).
 - **AWS Cost Explorer** (optional, real AWS only): attach an IAM role to the control-plane `ServiceAccount` (**IRSA**) using [`docs/iam-control-plane-cost-explorer.json`](../docs/iam-control-plane-cost-explorer.json), set `serviceAccount.annotations.eks.amazonaws.com/role-arn`, and set `cost.awsCostExplorerEnabled: "true"`. The API returns **account-level** last-30d unblended cost (not per slug). Skip on Kind unless you intentionally wire cloud credentials.
 - **Kyverno** (optional admission): after [Kyverno](https://kyverno.io/) is installed, apply [`gitops/bootstrap/manifests/kyverno-require-owner-layer-slug.yaml`](../gitops/bootstrap/manifests/kyverno-require-owner-layer-slug.yaml) so Pods in **`spice-instances`** must carry label **`owner-layer-slug`**.
 - **CI**: PRs touching `gitops/instances/**/values.yaml` run [`.github/workflows/validate-instances.yml`](../.github/workflows/validate-instances.yml) (`helm template` per instance).
 
-### Optional: Prometheus + OpenCost (Kind)
+### Optional: kube-prometheus-stack + OpenCost (Kind)
 
-OpenCost’s default config talks to in-cluster Prometheus at **`http://prometheus-server.prometheus-system.svc.cluster.local:80`**. If that Service does not exist, OpenCost logs show **`no such host`** / **`Prometheus communication error`** and the UI stays empty or degraded. Install **Prometheus first**, then **OpenCost**, then point the control plane at OpenCost.
+OpenCost (see [`gitops/addons/opencost/values-kind.yaml`](../gitops/addons/opencost/values-kind.yaml)) queries in-cluster Prometheus at **`http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090`** (Helm release **`kps`**, namespace **`monitoring`**). If that Service does not exist, OpenCost logs show **`no such host`** / **`Prometheus communication error`** and the UI stays empty or degraded. Install **kube-prometheus-stack first**, then **OpenCost**, then point the control plane at OpenCost.
 
 1. **Add Helm repos** (once per machine):
 
@@ -379,24 +380,27 @@ OpenCost’s default config talks to in-cluster Prometheus at **`http://promethe
    helm repo update
    ```
 
-2. **Install Prometheus** (minimal Kind values; Service name **`prometheus-server`** matches OpenCost defaults — see [`gitops/addons/prometheus/README.md`](../gitops/addons/prometheus/README.md)):
+2. **Install kube-prometheus-stack** (Prometheus Operator + Prometheus + **Grafana**; Kind values — see [`gitops/addons/kube-prometheus-stack/README.md`](../gitops/addons/kube-prometheus-stack/README.md)):
 
    ```bash
-   helm upgrade --install prometheus prometheus-community/prometheus \
-     -n prometheus-system --create-namespace \
-     -f gitops/addons/prometheus/values-kind.yaml
-   kubectl -n prometheus-system rollout status deploy/prometheus-server --timeout=300s
+   helm upgrade --install kps prometheus-community/kube-prometheus-stack \
+     --version 85.2.2 \
+     -n monitoring --create-namespace \
+     -f gitops/addons/kube-prometheus-stack/values-kind.yaml
+   kubectl -n monitoring rollout status deploy/kps-kube-prometheus-stack-operator --timeout=300s
+   kubectl -n monitoring rollout status statefulset/prometheus-kps-kube-prometheus-stack-prometheus --timeout=300s
+   kubectl -n monitoring rollout status deploy/kps-grafana --timeout=300s
    ```
 
    **Validate:**
 
    ```bash
-   kubectl -n prometheus-system get svc prometheus-server
+   kubectl -n monitoring get svc kps-kube-prometheus-stack-prometheus
    ```
 
-   Expect: Service **`prometheus-server`** in namespace **`prometheus-system`**, **`CLUSTER-IP`** assigned.
+   Expect: Service **`kps-kube-prometheus-stack-prometheus`** in namespace **`monitoring`**, port **9090**, **`CLUSTER-IP`** assigned. Grafana ingress (same tutorial ingress-nginx on host port **80**): **`http://grafana.127.0.0.1.nip.io/`** (login **`admin` / `admin`** unless you changed it).
 
-3. **Install OpenCost** (enables internal Prometheus client + **ingress-nginx** UI host `opencost.127.0.0.1.nip.io` — see [`gitops/addons/opencost/README.md`](../gitops/addons/opencost/README.md)):
+3. **Install OpenCost** (internal Prometheus client points at `kps` + **ingress-nginx** UI host `opencost.127.0.0.1.nip.io` — see [`gitops/addons/opencost/README.md`](../gitops/addons/opencost/README.md)):
 
    ```bash
    helm upgrade --install opencost opencost/opencost -n opencost --create-namespace \
@@ -424,7 +428,7 @@ OpenCost’s default config talks to in-cluster Prometheus at **`http://promethe
 
 | Symptom | Things to check |
 |---------|------------------|
-| OpenCost logs **`lookup prometheus-server.prometheus-system... no such host`** or empty UI | OpenCost expects Prometheus at the default in-cluster URL. Install Prometheus per **Optional: Prometheus + OpenCost (Kind)** above, then `kubectl -n opencost rollout restart deploy/opencost`. |
+| OpenCost logs **`lookup kps-kube-prometheus-stack-prometheus.monitoring... no such host`** or empty UI | OpenCost expects Prometheus from **kube-prometheus-stack** (`kps` in `monitoring`). Install the stack per **Optional: kube-prometheus-stack + OpenCost (Kind)** above, then `kubectl -n opencost rollout restart deploy/opencost`. |
 | OpenCost warnings about **`kubecost_pod_network_egress_bytes_total`** (or other `kubecost_*` metrics) | Normal without Kubecost exporters; core allocation can still work from standard kubelet / cAdvisor / kube-state-metrics scrapes. |
 | `403` from GitHub API | Token scopes, `GITHUB_OWNER` / `GITHUB_REPO`, branch name, and whether branch protection blocks the automation user. |
 | Argo `Unknown` / sync errors | Repo Secret in `argocd` namespace, placeholder URLs still present, or chart path `charts/spice-instance` / `valueFiles` path. |
@@ -438,6 +442,7 @@ OpenCost’s default config talks to in-cluster Prometheus at **`http://promethe
 | `control-plane.*.nip.io` does not load (connection refused, timeout) | Kind maps **host** `127.0.0.1:80` to the **node** port 80. Bootstrap values must set **`controller.hostPort.enabled: true`** (see [`gitops/bootstrap/values-ingress-nginx.yaml`](../gitops/bootstrap/values-ingress-nginx.yaml)); otherwise the Service uses a high `NodePort` and nothing listens on 80. Re-run the Helm upgrade for ingress-nginx, wait for the controller pod to be Ready, then try `curl -sI -H "Host: control-plane.127.0.0.1.nip.io" http://127.0.0.1/`. On macOS, another process using port 80 can block Kind; check with `sudo lsof -iTCP:80 -sTCP:LISTEN`. |
 | `argocd.*.nip.io` does not load | Same ingress-nginx / Kind port **80** checklist as the row above. Confirm the Argo CD Ingress exists: `kubectl -n argocd get ingress`. Re-apply values with `helm upgrade --install argocd ... -f gitops/bootstrap/values-argocd.yaml` if `server.ingress.enabled` was still false. |
 | `ImagePullBackOff` / **`Failed to pull image`** `ghcr.io/.../control-plane` | Confirm the **Control plane image** workflow has run and the tag in Git matches GHCR. Kind needs outbound access to **ghcr.io**. For a **private** package, add a docker-registry pull secret in `control-plane` and set **`imagePullSecrets`** in [`deploy/helm/control-plane/values.yaml`](../deploy/helm/control-plane/values.yaml). For **air-gapped Kind**, use Part B optional **`make image-load-local`** and override Helm `image.repository` / `image.tag`. |
+| `ImagePullBackOff` for **`.../control-plane-mcp`** | The chart defaults **`mcp.enabled: true`**; the sidecar image must exist in GHCR. Run the [**Control plane MCP image**](../.github/workflows/control-plane-mcp-image.yml) workflow (or temporarily set **`mcp.enabled: false`** until the image is available). Same pull-secret / public rules as the Next.js image. |
 | **`no match for platform in manifest`** | The image manifest did not include your node’s CPU (common: **linux/arm64** Kind on Apple Silicon vs an **amd64-only** CI build). Re-run the **Control plane image** workflow after [`.github/workflows/control-plane-image.yml`](../.github/workflows/control-plane-image.yml) publishes **multi-arch** (`linux/amd64` + `linux/arm64`), then sync Argo / restart the Deployment. |
 | `Resource not found in cluster: v1/Service:control-plane` | Namespaced objects were applied to **`default`** while Argo tracks **`control-plane`**. This chart now pins `metadata.namespace` (see `deploy/helm/control-plane/templates/_helpers.tpl`). Commit/push, **Refresh + Sync** the `control-plane` Application; remove stray `Service`/`Deployment` in `default` if they exist (check with `kubectl get svc,deploy -n default`). |
 
@@ -456,4 +461,4 @@ OpenCost’s default config talks to in-cluster Prometheus at **`http://promethe
 - [Spice Helm — Kubernetes](https://spiceai.org/docs/deployment/kubernetes)
 - [Argo CD ApplicationSet](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/)
 - [External Secrets — Vault](https://external-secrets.io/latest/provider/hashicorp-vault/)
-- [OpenCost addon](../gitops/addons/opencost/README.md) and [Prometheus addon](../gitops/addons/prometheus/README.md) (Kind cost stack)
+- [OpenCost addon](../gitops/addons/opencost/README.md) and [kube-prometheus-stack addon](../gitops/addons/kube-prometheus-stack/README.md) (Kind cost stack + Grafana)

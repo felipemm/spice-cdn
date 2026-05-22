@@ -1,0 +1,50 @@
+# Kind-friendly kube-prometheus-stack: Grafana + Prometheus Operator + Prometheus +
+# kube-state-metrics + node-exporter (no PVC; control-plane scrape targets off for Kind).
+#
+# Release name must stay **`kps`** so OpenCost can reach:
+#   kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+#
+# Grafana UI (with ingress-nginx host port 80): http://grafana.127.0.0.1.nip.io/
+# Default login: admin / admin — change before any shared or long-lived cluster.
+
+kubeControllerManager:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+kubeEtcd:
+  enabled: false
+
+alertmanager:
+  enabled: false
+
+defaultRules:
+  rules:
+    alertmanager: false
+    etcd: false
+    kubeControllerManager: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+
+grafana:
+  adminUser: admin
+  adminPassword: admin
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - grafana.127.0.0.1.nip.io
+    path: /
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    storageSpec:
+      emptyDir: {}
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        memory: 2Gi

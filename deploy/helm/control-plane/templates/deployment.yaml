@@ -95,6 +95,44 @@ spec:
               mountPath: /config
               readOnly: true
           {{- end }}
+        {{- if .Values.mcp.enabled }}
+        - name: mcp
+          image: "{{ .Values.mcp.image.repository }}:{{ .Values.mcp.image.tag }}"
+          imagePullPolicy: {{ .Values.mcp.image.pullPolicy }}
+          ports:
+            - name: mcp
+              containerPort: {{ .Values.mcp.port }}
+          env:
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: {{ .Values.mcp.port | quote }}
+            - name: CONTROL_PLANE_URL
+              value: "http://127.0.0.1:{{ .Values.service.port }}"
+            - name: FASTMCP_SHOW_BANNER
+              value: "false"
+            {{- if and .Values.mcp.auth.serverApiKeySecretName .Values.mcp.auth.serverApiKeySecretKey }}
+            - name: MCP_SERVER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mcp.auth.serverApiKeySecretName }}
+                  key: {{ .Values.mcp.auth.serverApiKeySecretKey }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: mcp
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: mcp
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.mcp.resources | nindent 12 }}
+        {{- end }}
       {{- if .Values.budgets.enabled }}
       volumes:
         - name: budgets

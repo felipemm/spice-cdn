@@ -7,13 +7,14 @@ This repository implements a **Next.js control plane** that manages **Spice.ai**
 | Path | Purpose |
 |------|---------|
 | [`apps/control-plane`](apps/control-plane) | Next.js app: instances CRUD via GitHub Contents API, Vault KV editor, Argo sync/refresh + **admin** stack dashboard + **cost / budgets** (optional OpenCost + AWS Cost Explorer). |
+| [`apps/control-plane-mcp`](apps/control-plane-mcp) | **FastMCP** (Python) **Streamable HTTP** at `/mcp`; Helm **sidecar** proxies the Next API for remote Cursor / Claude clients (**enabled by default** in chart values). |
 | [`charts/spice-instance`](charts/spice-instance) | Wrapper Helm chart around upstream `spiceai` + Ingress + optional `ExternalSecret`; requires **`ownerLayerSlug`** / **`owner-layer-slug`** labels. |
 | [`gitops/apps`](gitops/apps) | Argo CD `AppProject`, `ApplicationSet` (`instances/*`), `Application` for the control plane. |
 | [`gitops/bootstrap`](gitops/bootstrap) | Reference Helm values + one-shot manifests (ingress, Vault, ESO, Argo, root `Application`, optional **Kyverno** policy for `owner-layer-slug`). |
 | [`gitops/instances`](gitops/instances) | Per-instance `values.yaml` folders discovered by the `ApplicationSet`. |
 | [`gitops/cost`](gitops/cost) | Budget defaults (mirror of Helm `budgets.default.yaml`; tune per-slug caps). |
 | [`gitops/addons/opencost`](gitops/addons/opencost) | Optional OpenCost UI/API + Kind ingress notes. |
-| [`gitops/addons/prometheus`](gitops/addons/prometheus) | **Optional** Prometheus for Kind — required for OpenCost’s default in-cluster queries (`prometheus-server.prometheus-system`). |
+| [`gitops/addons/kube-prometheus-stack`](gitops/addons/kube-prometheus-stack) | **Optional** Prometheus Operator + Prometheus + **Grafana** (Kind values) — Prometheus endpoint for OpenCost (`kps-kube-prometheus-stack-prometheus.monitoring:9090`). |
 | [`hack/kind-config.yaml`](hack/kind-config.yaml) | Kind cluster with ingress-ready node + host port mappings. |
 | [`docs/tutorial.md`](docs/tutorial.md) | **Step-by-step** Kind tutorial (day‑0 bootstrap vs day‑2 webapp-only operations). |
 

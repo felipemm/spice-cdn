@@ -1,0 +1,66 @@
+# Optional: Argo CD Application for kube-prometheus-stack (Prometheus + Grafana on Kind).
+# Keep `helm.values` in sync with values-kind.yaml (same pattern as OpenCost).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: kube-prometheus-stack
+    repoURL: https://prometheus-community.github.io/helm-charts
+    targetRevision: 85.2.2
+    helm:
+      releaseName: kps
+      values: |
+        kubeControllerManager:
+          enabled: false
+
+        kubeScheduler:
+          enabled: false
+
+        kubeEtcd:
+          enabled: false
+
+        alertmanager:
+          enabled: false
+
+        defaultRules:
+          rules:
+            alertmanager: false
+            etcd: false
+            kubeControllerManager: false
+            kubeSchedulerAlerting: false
+            kubeSchedulerRecording: false
+
+        grafana:
+          adminUser: admin
+          adminPassword: admin
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            hosts:
+              - grafana.127.0.0.1.nip.io
+            path: /
+
+        prometheus:
+          prometheusSpec:
+            retention: 7d
+            storageSpec:
+              emptyDir: {}
+            resources:
+              requests:
+                cpu: 100m
+                memory: 512Mi
+              limits:
+                memory: 2Gi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

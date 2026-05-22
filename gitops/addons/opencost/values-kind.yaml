@@ -13,6 +13,10 @@ opencost:
   prometheus:
     internal:
       enabled: true
+      # kube-prometheus-stack (release `kps`, namespace `monitoring`) — see ../kube-prometheus-stack/
+      serviceName: kps-kube-prometheus-stack-prometheus
+      namespaceName: monitoring
+      port: 9090
   ui:
     ingress:
       enabled: true

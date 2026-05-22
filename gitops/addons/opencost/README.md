@@ -8,13 +8,13 @@ The admin **Costs** panel calls OpenCost allocation endpoints (best-effort; API 
 
 ## Prometheus is required (default in-cluster URL)
 
-With **`opencost.prometheus.internal.enabled: true`** (see [`values-kind.yaml`](./values-kind.yaml)), OpenCost queries:
+With **`opencost.prometheus.internal.enabled: true`** (see [`values-kind.yaml`](./values-kind.yaml)), OpenCost queries **kube-prometheus-stack** Prometheus:
 
-`http://prometheus-server.prometheus-system.svc.cluster.local:80`
+`http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090`
 
 If that Service does not exist, logs show **`no such host`** / **`Prometheus communication error`** and allocation data will be empty or degraded.
 
-**Fix on Kind:** install Prometheus **first** using [`../prometheus/README.md`](../prometheus/README.md) and [`../prometheus/values-kind.yaml`](../prometheus/values-kind.yaml) (creates **`prometheus-server`** in **`prometheus-system`**). Then restart OpenCost:
+**Fix on Kind:** install **[kube-prometheus-stack](../kube-prometheus-stack/README.md)** **first** (Helm release name **`kps`**, namespace **`monitoring`** — matches `serviceName` / `namespaceName` / `port` in `values-kind.yaml`). Then restart OpenCost:
 
 ```bash
 kubectl -n opencost rollout restart deploy/opencost
