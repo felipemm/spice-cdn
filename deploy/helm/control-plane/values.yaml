@@ -1,25 +1,20 @@
 replicaCount: 1
-
 image:
   # Pushed by .github/workflows/control-plane-image.yml to GHCR; tag is bumped to the Git SHA on each publish so Argo CD rolls the Deployment.
   # Kind uses this ref too: nodes pull from ghcr.io (no kind load) when the package is public or imagePullSecrets is set.
   repository: ghcr.io/felipemm/spice-cdn/control-plane
   tag: 54baf1df87dbab639ce108d05b518611561931e2
   pullPolicy: IfNotPresent
-
 # When the GHCR package is private, create a docker-registry secret and reference it here, e.g. [ { name: ghcr-pull } ].
 imagePullSecrets: []
-
 service:
   type: ClusterIP
   port: 3000
-
 ingress:
   enabled: true
   className: nginx
   host: control-plane.127.0.0.1.nip.io
   annotations: {}
-
 env:
   # GitHub repository backing GitOps (same values Argo uses)
   githubOwner: felipemm
@@ -31,24 +26,20 @@ env:
   # Argo CD namespace (for Kubernetes API reads / sync patches)
   argocdNamespace: argocd
   spiceNamespace: spice-instances
-
 resources:
   limits:
     memory: 512Mi
   requests:
     cpu: 100m
     memory: 256Mi
-
 serviceAccount:
   create: true
   name: control-plane
   # EKS IRSA example (uncomment and set role ARN when using AWS Cost Explorer from the pod):
   # annotations:
   #   eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/control-plane-cost
-
 rbac:
   create: true
-
 secrets:
   # Reference existing Secret keys mounted into the pod (do not commit real values).
   githubTokenSecretName: control-plane-secrets
@@ -57,16 +48,13 @@ secrets:
   vaultTokenSecretKey: vault_token
   adminApiKeySecretName: control-plane-secrets
   adminApiKeySecretKey: admin_api_key
-
 # Optional: pin namespace on every manifest (must match Argo Application destination.namespace).
 # Leave empty to use .Release.Namespace when the Helm engine sets it.
 targetNamespace: ""
-
 budgets:
   enabled: true
   # If non-empty, replaces budgets.default.yaml (use |- multiline string in Argo Helm values).
   definition: ""
-
 cost:
   # Optional OpenCost base URL, e.g. http://opencost.opencost.svc.cluster.local:9003
   opencostBaseUrl: ""
@@ -77,7 +65,6 @@ cost:
   nodeInstanceType: m6i.large
   # Optional override for declare-based estimates: { "usdPerCpuCoreMonth": 35, "usdPerGiBMonth": 8.76 }
   pricingJson: null
-
 # FastMCP Streamable HTTP sidecar — same pod as the Next.js app, calls loopback.
 # Remote MCP URL (with ingress): https://<ingress.host>/mcp
 # Default: enabled. Build/push image via .github/workflows/control-plane-mcp-image.yml (apps/control-plane-mcp);
@@ -87,7 +74,7 @@ mcp:
   port: 8000
   image:
     repository: ghcr.io/felipemm/spice-cdn/control-plane-mcp
-    tag: latest
+    tag: 00285b08eb1f5cd7a0f7b5b6c96249887b050a1c
     pullPolicy: IfNotPresent
   resources:
     limits:
