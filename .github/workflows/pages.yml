@@ -2,6 +2,9 @@
 name: Pages
 
 on:
+  # Rebuild when a GitHub Release is published (same moment as the release bundle), so public/install.sh embeds that tag.
+  release:
+    types: [published]
   push:
     branches: [main]
     paths:
@@ -9,6 +12,11 @@ on:
       - "scripts/install.sh"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
+    inputs:
+      spice_release:
+        description: "Tag to embed in public/install.sh (default = latest GitHub Release API)"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -16,7 +24,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages-${{ github.ref }}
+  group: pages-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -24,6 +32,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # On release, build from the release tag so install.sh matches the published bundle.
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -38,8 +49,26 @@ jobs:
           PUBLIC_ASTRO_BASE: ${{ vars.PUBLIC_ASTRO_BASE }}
           REPO_OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_SPICE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.spice_release || '' }}
         run: |
           set -euo pipefail
+          if [ "${EVENT_NAME}" = "release" ] && [ -n "${RELEASE_TAG:-}" ]; then
+            export PUBLIC_SPICE_PACKAGED_RELEASE="${RELEASE_TAG}"
+          elif [ -n "${INPUT_SPICE_RELEASE:-}" ]; then
+            export PUBLIC_SPICE_PACKAGED_RELEASE="${INPUT_SPICE_RELEASE}"
+          else
+            export PUBLIC_SPICE_PACKAGED_RELEASE="$(
+              curl -fsSL \
+                -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" \
+                | jq -r '.tag_name // empty'
+            )"
+          fi
           export PUBLIC_ASTRO_SITE="${PUBLIC_ASTRO_SITE:-https://${REPO_OWNER}.github.io/${REPO_NAME}/}"
           export PUBLIC_ASTRO_BASE="${PUBLIC_ASTRO_BASE:-/${REPO_NAME}/}"
           npm ci

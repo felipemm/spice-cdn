@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # Injected when copied into a release tarball (see .github/workflows/release.yml).
-SPICE_PACKAGED_RELEASE=""
+SPICE_PACKAGED_RELEASE="v0.1.0"
 
 SPICE_PRODUCT_REPO="${SPICE_PRODUCT_REPO:-felipemm/spice-cdn}"
 SPICE_GITOPS_DIR="${SPICE_GITOPS_DIR:-}"
@@ -114,8 +114,12 @@ materialize_tree() {
   rm -rf "${out}"
   mkdir -p "${out}"
 
-  if [[ ! -d "${bundle_root}/templates/gitops" ]]; then
-    die "bundle missing templates/gitops (under ${bundle_root})"
+  local tpl_dir="${bundle_root}/templates/gitops"
+  if [[ ! -d "${tpl_dir}" && -d "${bundle_root}/gitops" ]]; then
+    tpl_dir="${bundle_root}/gitops"
+  fi
+  if [[ ! -d "${tpl_dir}" ]]; then
+    die "bundle missing templates/gitops (or legacy gitops/) under ${bundle_root}"
   fi
 
   local go="${gitops_url#https://github.com/}"
@@ -123,15 +127,15 @@ materialize_tree() {
   local g_owner="${go%%/*}"
   local g_name="${go##*/}"
 
-  cp -R "${bundle_root}/templates/gitops/apps" "${out}/apps"
-  cp -R "${bundle_root}/templates/gitops/bootstrap" "${out}/bootstrap"
-  [[ -d "${bundle_root}/templates/gitops/addons" ]] && cp -R "${bundle_root}/templates/gitops/addons" "${out}/addons" || true
-  [[ -d "${bundle_root}/templates/gitops/cost" ]] && cp -R "${bundle_root}/templates/gitops/cost" "${out}/cost" || true
+  cp -R "${tpl_dir}/apps" "${out}/apps"
+  cp -R "${tpl_dir}/bootstrap" "${out}/bootstrap"
+  [[ -d "${tpl_dir}/addons" ]] && cp -R "${tpl_dir}/addons" "${out}/addons" || true
+  [[ -d "${tpl_dir}/cost" ]] && cp -R "${tpl_dir}/cost" "${out}/cost" || true
   cp -R "${bundle_root}/charts" "${out}/charts"
   cp -R "${bundle_root}/deploy" "${out}/deploy"
   mkdir -p "${out}/instances"
   cp -R "${bundle_root}/examples/instances/"* "${out}/instances/"
-  cp "${bundle_root}/templates/gitops/platform-version.yaml" "${out}/platform-version.yaml"
+  cp "${tpl_dir}/platform-version.yaml" "${out}/platform-version.yaml"
 
   # Substitute template tokens (portable sed; no sed -i).
   while IFS= read -r -d '' f; do

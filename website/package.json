@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
-    "prebuild": "mkdir -p public && cp ../scripts/install.sh public/install.sh",
+    "prebuild": "node ./scripts/embed-install-release.mjs",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro"

@@ -3,6 +3,22 @@
 # Pinned installs use a GitHub Release tarball; dev mode uses this git checkout when SPICE_RELEASE=0.0.0-dev.
 set -euo pipefail
 
+# When run as `curl … | bash`, the script has no file path; BASH_SOURCE[0] is unset and `set -u` errors.
+set +u
+__install_src="${BASH_SOURCE[0]-}"
+set -u
+SCRIPT_DIR=""
+REPO_ROOT=""
+if [[ -n "${__install_src}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${__install_src}")" && pwd)"
+  REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+  INSTALL_FROM_PIPE=0
+else
+  REPO_ROOT="$(pwd)"
+  INSTALL_FROM_PIPE=1
+fi
+unset __install_src
+
 # Injected when copied into a release tarball (see .github/workflows/release.yml).
 SPICE_PACKAGED_RELEASE=""
 
@@ -11,8 +27,19 @@ SPICE_GITOPS_DIR="${SPICE_GITOPS_DIR:-}"
 CLUSTER_NAME="${CLUSTER_NAME:-spice-gitops}"
 STATE_DIR="${STATE_DIR:-"$HOME/.spice-platform"}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# Piped install without an embedded tag: default to latest GitHub Release of the product repo (avoids 0.0.0-dev).
+if [[ "${INSTALL_FROM_PIPE}" -eq 1 ]] && [[ -z "${SPICE_PACKAGED_RELEASE}" ]] && [[ -z "${SPICE_RELEASE:-}" ]]; then
+  if command -v curl >/dev/null 2>&1; then
+    _rel="$(curl -fsSL \
+      -H "Accept: application/vnd.github+json" \
+      "https://api.github.com/repos/${SPICE_PRODUCT_REPO}/releases/latest" 2>/dev/null \
+      | sed -n 's/^  "tag_name": "\(.*\)"/\1/p' | head -1)" || true
+    if [[ -n "${_rel}" ]]; then
+      SPICE_PACKAGED_RELEASE="${_rel}"
+    fi
+  fi
+fi
+unset _rel 2>/dev/null || true
 
 usage() {
   cat <<'USAGE'
