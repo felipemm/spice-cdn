@@ -32,12 +32,11 @@ spec:
                     name: {{ include "spice-instance.spiceaiServiceName" . }}
                     port:
                     number: 8090
-            # second path alongside /
             - path: /metrics
-            pathType: Prefix
-            backend:
-                service:
-                name: {{ include "spice-instance.spiceaiServiceName" . }}
-                port:
-                    number: 9090
+                pathType: Prefix
+                backend:
+                    service:
+                    name: {{ include "spice-instance.spiceaiServiceName" . }}
+                    port:
+                        number: 9090
 {{- end }}
