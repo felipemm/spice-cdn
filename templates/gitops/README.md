@@ -6,9 +6,12 @@ Placeholders (replaced at install time):
 
 | Token | Meaning |
 |--------|---------|
-| `__GITOPS_REPO_HTTPS_URL__` | HTTPS clone URL of your GitOps repo (with `.git` suffix) |
+| `__GITOPS_REPO_HTTPS_URL__` | Git clone URL written into Argo sources (HTTPS for GitHub remotes; `http://…` for the local Kind + Gitea lab) |
 | `__GITOPS_TARGET_REVISION__` | Argo `targetRevision` (e.g. `main`, `HEAD`, or a tag) |
 | `__PLATFORM_RELEASE__` | Pinned product release tag (e.g. `v0.1.0`) |
+| `__GITOPS_APP_INSECURE__` | When the URL is plain HTTP, set to `insecure: true` under `Application` sources (otherwise empty) |
+| `__GITOPS_APPSET_GIT_INSECURE__` | Same for the ApplicationSet `git` generator |
+| `__GITOPS_APPSET_SRC_INSECURE__` | Same for the ApplicationSet template `source` |
 
 Layout after materialization at the **root of your GitOps repo**:
 

@@ -10,6 +10,7 @@ spec:
   generators:
     - git:
         repoURL: __GITOPS_REPO_HTTPS_URL__
+__GITOPS_APPSET_GIT_INSECURE__
         revision: __GITOPS_TARGET_REVISION__
         directories:
           - path: instances/*
@@ -25,6 +26,7 @@ spec:
         namespace: spice-instances
       source:
         repoURL: __GITOPS_REPO_HTTPS_URL__
+__GITOPS_APPSET_SRC_INSECURE__
         targetRevision: __GITOPS_TARGET_REVISION__
         path: charts/spice-instance
         helm:

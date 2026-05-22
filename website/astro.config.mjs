@@ -17,6 +17,7 @@ export default defineConfig({
 				{
 					label: 'Guides',
 					items: [
+						{ label: 'User guide', slug: 'guides/user-guide' },
 						{ label: 'Install', slug: 'guides/install' },
 						{ label: 'Product vs GitOps', slug: 'guides/architecture' },
 					],

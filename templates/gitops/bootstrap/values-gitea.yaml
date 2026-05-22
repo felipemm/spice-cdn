@@ -1,0 +1,36 @@
+# Gitea in Kind (local lab). Admin password is overridden at install time via a second -f file.
+# UI: http://gitea.127.0.0.1.nip.io/ (requires ingress-nginx from helm_bootstrap).
+persistence:
+  enabled: false
+postgresql:
+  enabled: false
+postgresql-ha:
+  enabled: false
+valkey-cluster:
+  enabled: false
+redis-cluster:
+  enabled: false
+redis:
+  enabled: false
+memcached:
+  enabled: false
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: gitea.127.0.0.1.nip.io
+      paths:
+        - path: /
+          pathType: Prefix
+gitea:
+  admin:
+    username: spice-admin
+    password: "will-be-overridden"
+    email: spice-admin@local.invalid
+  config:
+    server:
+      ROOT_URL: http://gitea.127.0.0.1.nip.io/
+      DOMAIN: gitea.127.0.0.1.nip.io
+      LANDING_PAGE: explore
+    service:
+      DISABLE_REGISTRATION: true

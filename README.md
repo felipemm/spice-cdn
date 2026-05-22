@@ -2,6 +2,8 @@
 
 This repository is the **product**: Next.js control plane, Helm charts, installer, CI, and documentation site source. **Runtime GitOps** (what Argo CD reconciles) lives in a **separate repository** that you own.
 
+**New here?** Read the **[user guide](docs/USER_GUIDE.md)** (quick start, optional settings, and end-to-end steps). Deep-dive Kind bootstrap steps are in **[docs/tutorial.md](docs/tutorial.md)**.
+
 ```mermaid
 flowchart LR
   subgraph product [This repo]
@@ -34,6 +36,7 @@ flowchart LR
 | [`examples/instances/`](examples/instances) | Example `values.yaml` validated in CI — **not** cluster SoT. |
 | [`scripts/install.sh`](scripts/install.sh) | Downloads a **GitHub Release** tarball, materializes a GitOps tree, bootstraps Kind + ingress + Vault + ESO + Argo. |
 | [`website/`](website/) | Astro + Starlight site; build copies `install.sh` to `public/`. |
+| [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) | **Full user guide:** quick start, optional install settings, step-by-step flow. |
 | [`docs/tutorial.md`](docs/tutorial.md) | Manual Kind walkthrough (paths use `templates/gitops/bootstrap/...`). |
 | [`docs/migration-two-repos.md`](docs/migration-two-repos.md) | Move from monorepo to product + GitOps. |
 

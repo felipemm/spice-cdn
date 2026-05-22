@@ -15,7 +15,9 @@ const dst = join(publicDir, "install.sh");
 mkdirSync(publicDir, { recursive: true });
 
 let content = readFileSync(src, "utf8");
-const tag = (process.env.PUBLIC_SPICE_PACKAGED_RELEASE ?? "").trim();
+const tag = (process.env.PUBLIC_SPICE_PACKAGED_RELEASE ?? "")
+  .trim()
+  .replace(/^,+|,+$/g, "");
 if (tag) {
   const safe = tag.replace(/["\\]/g, "");
   content = content.replace(/^SPICE_PACKAGED_RELEASE=.*$/m, `SPICE_PACKAGED_RELEASE="${safe}"`);
