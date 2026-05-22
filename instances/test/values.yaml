@@ -67,7 +67,37 @@ spiceai:
             SELECT * FROM connections
             WHERE dt = (select max(dt) from connections)
   
-  additionalEnv: []
+  additionalEnv:
+    - name: DATABRICKS_HOST
+      valueFrom:
+        secretKeyRef:
+          name: spice-test-env   # same as externalSecret.targetSecretName
+          key: DATABRICKS_HOST
+    - name: DATABRICKS_SQL_WAREHOUSE_ID
+      valueFrom:
+        secretKeyRef:
+          name: spice-test-env   # same as externalSecret.targetSecretName
+          key: DATABRICKS_SQL_WAREHOUSE_ID
+    - name: DATABRICKS_CLIENT_ID
+      valueFrom:
+        secretKeyRef:
+          name: spice-test-env   # same as externalSecret.targetSecretName
+          key: DATABRICKS_CLIENT_ID
+    - name: DATABRICKS_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: spice-test-env   # same as externalSecret.targetSecretName
+          key: DATABRICKS_CLIENT_SECRET
+    - name: OPENAI_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: spice-test-env   # same as externalSecret.targetSecretName
+          key: OPENAI_API_KEY
+    - name: OPENAI_ENDPOINT
+      valueFrom:
+        secretKeyRef:
+          name: spice-test-env   # same as externalSecret.targetSecretName
+          key: OPENAI_ENDPOINT
   service:
     type: ClusterIP
   resources:
