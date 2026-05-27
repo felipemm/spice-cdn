@@ -7,11 +7,19 @@ This addon uses the official **[Helm chart](https://github.com/apache/superset/t
 ## Kind: UI on port 80 (ingress-nginx)
 
 1. Ensure **ingress-nginx** is installed (same as the rest of the platform bootstrap).
-2. Install or upgrade with [`values-kind.yaml`](./values-kind.yaml) (ingress host **`superset.127.0.0.1.nip.io`**, no Postgres PVC).
+2. Install or upgrade with [`values-kind.yaml`](./values-kind.yaml) (ingress host **`superset.127.0.0.1.nip.io`**, bundled PostgreSQL with an **8Gi PVC** for metadata).
 3. After the **init** Job completes, open **`http://superset.127.0.0.1.nip.io/`**.
 4. Admin credentials: **`scripts/install.sh`** patches the Argo Application with **`init.adminUser`** and writes **`~/.spice-platform/grafana-superset-credentials.txt`** (random password for user **`admin`**). Manual Helm with only [`values-kind.yaml`](./values-kind.yaml) follows the chart default (**`admin` / `admin`**) until you override **`init.adminUser`**.
 
-**`SUPERSET_SECRET_KEY`** — the Kind Argo template uses a placeholder string; **`install.sh`** replaces it with a random hex value saved next to the Grafana/Superset password files. **Replace it in production.**
+### Metadata persistence (Kind lab)
+
+SQL Lab databases, dashboards, charts, and other Superset settings live in the **bundled PostgreSQL** subchart. [`values-kind.yaml`](./values-kind.yaml) enables **`postgresql.primary.persistence`** (8Gi PVC, cluster default `StorageClass`, usually **`standard`** on Kind) so metadata survives pod restarts and routine Argo syncs while the PVC remains.
+
+- **First upgrade from an older lab without a PVC:** Argo sync creates a new empty volume — existing in-cluster settings are lost once. After that, settings persist across pod recreates.
+- **`SUPERSET_SECRET_KEY`:** must stay stable once data exists. The Kind Argo template uses a placeholder; **`install.sh`** replaces it with a random hex value in **`~/.spice-platform/superset-lab.secret-key`** and patches the materialized app. Do not change this key after the database has data (encrypted connection fields become unreadable). **Replace with your own secret management in production.**
+- **Argo CD `prune: true`:** deleting the entire **`superset`** Application can remove Helm-managed PVCs. Avoid pruning the app if you need to retain data, or back up PostgreSQL first.
+- **`kind delete cluster`:** destroys node disks; PVC data is lost (expected for local labs).
+- **Redis** (bundled, no PVC): Celery/cache only; metadata is in Postgres.
 
 ## Spice + Flight SQL driver
 

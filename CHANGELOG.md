@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-27
+
+### Changed
+
+- **Argo CD (Kind bootstrap):** raise `application-controller` and `repoServer` memory limits in `templates/gitops/bootstrap/values-argocd.yaml` so large Helm apps (e.g. kube-prometheus-stack) sync without OOMing mid-operation.
+- **Superset (Kind addon):** enable bundled PostgreSQL **8Gi** PVC in `values-kind.yaml` / `application-superset.yaml` so SQL Lab metadata survives pod restarts; document upgrade, `SUPERSET_SECRET_KEY` stability, and Argo prune behavior in the addon README.
+
+### Fixed
+
+- **Argo CD:** controller stuck in **Syncing** (`operationState.phase=Running`) when memory limit was too low during prometheus-stack manifest generation.
+
 ## [0.2.0] - 2026-05-27
 
 ### Added
@@ -69,7 +80,8 @@ First public platform release: product repository + operator-owned GitOps reposi
 
 - **Repository layout:** runtime GitOps is no longer the source of truth in this repo; `gitops/` at repo root is a pointer — templates live in `templates/gitops/`.
 
-[unreleased]: https://github.com/felipemm/spice-cdn/compare/v0.2.0...HEAD
+[unreleased]: https://github.com/felipemm/spice-cdn/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/felipemm/spice-cdn/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/felipemm/spice-cdn/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/felipemm/spice-cdn/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/felipemm/spice-cdn/releases/tag/v0.1.0

@@ -19,16 +19,19 @@ server:
       cpu: 250m
       memory: 256Mi
 controller:
+  # kube-prometheus-stack (many CRDs + SSA) can spike controller memory; 512Mi OOMs mid-sync
+  # and leaves Applications stuck in operationState.phase=Running ("Syncing" in the UI).
   resources:
     limits:
-      memory: 512Mi
+      memory: 2Gi
     requests:
       cpu: 250m
-      memory: 256Mi
+      memory: 1Gi
 repoServer:
+  # Helm manifest render for kube-prometheus-stack is large; keep headroom for concurrent apps.
   resources:
     limits:
-      memory: 512Mi
+      memory: 1Gi
     requests:
       cpu: 250m
-      memory: 256Mi
+      memory: 512Mi

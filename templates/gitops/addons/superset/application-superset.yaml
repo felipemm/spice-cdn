@@ -73,7 +73,9 @@ spec:
         postgresql:
           primary:
             persistence:
-              enabled: false
+              enabled: true
+              size: 8Gi
+              # Kind default StorageClass is usually "standard"; omit storageClass to use cluster default
 
         init:
           resources:

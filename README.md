@@ -2,7 +2,7 @@
 
 This repository is the **product**: Next.js control plane, Helm charts, installer, CI, and documentation site source. **Runtime GitOps** (what Argo CD reconciles) lives in a **separate repository** that you own.
 
-**New here?** Read the **[user guide](docs/USER_GUIDE.md)** (quick start, optional settings, and end-to-end steps). Deep-dive Kind bootstrap steps are in **[docs/tutorial.md](docs/tutorial.md)**. Release notes: **[CHANGELOG.md](CHANGELOG.md)**.
+**New here?** Read the **[user guide](docs/USER_GUIDE.md)** (quick start, optional settings, and end-to-end steps). Deep-dive Kind bootstrap steps are in **[docs/tutorial.md](docs/tutorial.md)**. Latest release: **[v0.2.1](https://github.com/felipemm/spice-cdn/releases/tag/v0.2.1)** — full history in **[CHANGELOG.md](CHANGELOG.md)**.
 
 ```mermaid
 flowchart LR
@@ -53,7 +53,12 @@ flowchart LR
 curl -fsSL "https://<owner>.github.io/<repo>/install.sh" | bash
 ```
 
-The served `install.sh` is copied from this repo at build time; **releases** set `SPICE_PACKAGED_RELEASE` inside the packaged script. Override with `SPICE_RELEASE=vX.Y.Z`.
+The served `install.sh` is copied from this repo at build time; **releases** set `SPICE_PACKAGED_RELEASE` inside the packaged script. Override with `SPICE_RELEASE=vX.Y.Z` (latest: **`v0.2.1`**).
+
+```bash
+export SPICE_RELEASE=v0.2.1
+curl -fsSL "https://felipemm.github.io/spice-cdn/install.sh" | bash
+```
 
 **Local Kind lab (no GitHub GitOps repo)**
 
@@ -92,7 +97,12 @@ export GITOPS_REPO_URL=https://github.com/org/my-gitops.git
 
 ## Releases
 
-Tag `v*` → workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) publishes `spice-platform-<tag>.tar.gz` + `.sha256` and attaches them to a GitHub Release.
+Tag `v*` → workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) publishes `spice-platform-<tag>.tar.gz` + `.sha256` and attaches them to a [GitHub Release](https://github.com/felipemm/spice-cdn/releases).
+
+| Tag | Notes |
+|-----|--------|
+| [v0.2.1](https://github.com/felipemm/spice-cdn/releases/tag/v0.2.1) | Argo CD memory for large Helm syncs; Superset Postgres PVC on Kind |
+| [v0.2.0](https://github.com/felipemm/spice-cdn/releases/tag/v0.2.0) | Local Gitea lab, Superset integration, release docs |
 
 ## Control plane environment
 
