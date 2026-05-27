@@ -1,0 +1,22 @@
+# Standalone Valkey (Bitnami) for Kind — shared by Gitea (session/cache/queue) and other workloads.
+# Install: `helm repo add bitnami https://charts.bitnami.com/bitnami && helm repo update`
+# Password: pass a second `-f` with `auth.password` (the installer writes ~/.spice-platform/valkey-auth-values.yaml).
+#
+# In-cluster Redis protocol endpoint:
+#   valkey-primary.<namespace>.svc.cluster.local:6379
+#
+# Chart: https://github.com/bitnami/charts/tree/main/bitnami/valkey
+architecture: standalone
+auth:
+  enabled: true
+  # Overridden at install time — empty fails; always pass -f with password for real installs.
+  password: ""
+primary:
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: 25m
+      memory: 128Mi
+    limits:
+      memory: 256Mi

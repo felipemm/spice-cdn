@@ -1,0 +1,8 @@
+{
+    "OPENAI_API_KEY": "copy your requester token here",
+    "OPENAI_ENDPOINT": "https://generative-ai-platform.ifood-sandbox.com.br/api/v2",
+    "DATABRICKS_HOST": "ifood-prod-main.cloud.databricks.com",
+    "DATABRICKS_CLIENT_ID": "111111-222222-333333-444444",
+    "DATABRICKS_CLIENT_SECRET": "111111-222222-333333-444444",
+    "DATABRICKS_SQL_WAREHOUSE_ID": "0831a845aa83b2e3"
+}

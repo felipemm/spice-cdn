@@ -17,7 +17,9 @@ For architecture diagrams and the split between product and GitOps, see [README.
 | `curl` | Download release bundle / `install.sh` |
 | `openssl` | Random `admin_api_key` during bootstrap |
 
-**GitHub:** an **empty** GitOps repository (HTTPS URL ending in `.git`) and a **personal access token** with **`repo`** scope on that repository (Argo reads the repo; the control plane uses the GitHub Contents API to commit instance YAML).
+**GitHub (remote GitOps):** an **empty** GitOps repository (HTTPS URL ending in `.git`) and a **personal access token** with **`repo`** scope on that repository (Argo reads the repo; the control plane uses the GitHub Contents API to commit instance YAML).
+
+**Local lab only:** Docker, Kind, `kubectl`, Helm, and `curl` are enough — no GitHub GitOps repo required (see [Local Kind lab](#local-kind-lab-no-github-gitops-repo) below).
 
 ---
 
@@ -90,6 +92,42 @@ curl -sf "http://control-plane.127.0.0.1.nip.io/api/health"
 
 ---
 
+## Local Kind lab (no GitHub GitOps repo)
+
+For a self-contained lab, run the installer **without** `--gitops-repo` (or pipe `curl …/install.sh | bash` with no arguments):
+
+```bash
+./scripts/install.sh
+# Non-interactive:
+YES=1 ./scripts/install.sh
+```
+
+The installer:
+
+1. Creates Kind cluster **`spice-gitops`** (same as remote mode).
+2. Installs **ingress-nginx**, **Valkey**, **Gitea** (UI at `http://gitea.127.0.0.1.nip.io/`), optional **Gitea Actions** act_runner, **Vault**, **ESO**, **Argo CD**.
+3. Materializes the GitOps tree and **pushes once** to in-cluster Gitea (`http://gitea-http.gitea.svc.cluster.local:3000/spice-admin/gitops.git` for Argo).
+4. Sets **`GITOPS_BACKEND=gitea`** on the control plane so instance CRUD uses Gitea REST instead of `api.github.com`.
+
+**Credentials** (mode `600` under `STATE_DIR`, default `~/.spice-platform/`):
+
+| File | Contents |
+|------|----------|
+| `gitea-local-credentials.txt` | Gitea admin user/password (also Argo repository credential) |
+| `grafana-superset-credentials.txt` | Random Grafana / Superset admin passwords when addons are enabled |
+| `install.env` | Last install metadata (cluster name, repo URL, release tag) |
+
+**Re-push** GitOps after editing the materialized tree locally:
+
+```bash
+make gitops-push-gitea
+# or: ./scripts/push-gitea-gitops.sh
+```
+
+Require a remote URL even on Kind: `SPICE_DISABLE_LOCAL_GITOPS=1 ./scripts/install.sh --gitops-repo …`.
+
+---
+
 ## Optional configurations
 
 ### Installer: CLI flags
@@ -103,6 +141,7 @@ curl -sf "http://control-plane.127.0.0.1.nip.io/api/health"
 | `--upgrade` | Compare `~/.spice-platform/install.env` to latest GitHub release and re-materialize (remote GitOps only) |
 | `--uninstall --all` | Delete Kind cluster `CLUSTER_NAME` |
 | `--yes` | Skip confirmations |
+| *(omit `--gitops-repo`)* | Local Kind lab with in-cluster Gitea (see above) |
 
 Run `./scripts/install.sh --help` for the full usage text.
 
@@ -117,9 +156,12 @@ Run `./scripts/install.sh --help` for the full usage text.
 | `GITOPS_PAT` / `GITHUB_TOKEN` | PAT for Argo repo secret + control plane |
 | `GITOPS_TARGET_REVISION` | Branch/tag Argo tracks (default `main`) |
 | `CLUSTER_NAME` | Kind cluster name (default `spice-gitops`) |
-| `STATE_DIR` | Installer state (default `~/.spice-platform`) |
+| `STATE_DIR` | Installer state (default `~/.spice-platform`) — includes `install.env`, Valkey/Grafana/Superset password files, and `grafana-superset-credentials.txt` for the observability add-ons |
 | `YES=1` | Non-interactive confirmations |
 | `GITHUB_TOKEN` | Optional: private releases, upgrade API |
+| `SPICE_DISABLE_LOCAL_GITOPS=1` | Fail if `--gitops-repo` is omitted (disable Gitea lab default) |
+| `SPICE_GITEA_*`, `SPICE_VALKEY_*` | Gitea/Valkey namespaces, release names, ingress host (see `install.sh --help`) |
+| `SPICE_SKIP_GITEA_ACTIONS_RUNNER=1` | Skip Gitea Actions act_runner chart |
 
 **Developers** — use the git tree instead of downloading a tarball:
 
@@ -150,12 +192,13 @@ After materialization, these keys live in your GitOps repo under `deploy/helm/co
 | **Image** | `image.repository`, `image.tag` (CI publishes to GHCR; Kind pulls over the network) |
 | **Pull secrets** | `imagePullSecrets` for private GHCR |
 | **Ingress** | `ingress.host`, `ingress.className`, `ingress.annotations` |
-| **GitOps API** | `env.gitopsRepoOwner`, `env.gitopsRepoName`, `env.gitopsRepoBranch` (installer substitutes from `--gitops-repo`) |
+| **GitOps API** | `env.gitopsBackend` (`github` or `gitea`), `env.gitopsRepoOwner`, `env.gitopsRepoName`, `env.gitopsRepoBranch`, `env.gitopsGiteaApiBaseUrl` (local lab: in-cluster `/api/v1` URL) |
 | **Vault** | `env.vaultAddr` — use Service DNS, e.g. `http://vault.vault.svc.cluster.local:8200` |
 | **Secrets** | `secrets.*` — Kubernetes Secret name/keys for `gitops_token`, `vault_token`, `admin_api_key` |
 | **Cost / OpenCost** | `cost.opencostBaseUrl`, `cost.awsCostExplorerEnabled`, `cost.nodeInstanceType`, `cost.pricingJson` |
 | **Budgets** | `budgets.enabled`, `budgets.definition` |
 | **MCP sidecar** | `mcp.enabled`, `mcp.image`, `mcp.auth.*` |
+| **Superset (optional)** | **Vault (recommended):** `externalSecret.enabled` + `externalSecret.syncSuperset`, KV path `spice/control-plane` with `SUPERSET_URL`, `SUPERSET_USERNAME`, `SUPERSET_PASSWORD` (see `deploy/helm/control-plane/vault-seed.example.json`; Kind `install.sh` seeds this automatically). **Or** `env.supersetUrl` + `secrets.supersetPasswordSecretName`. Each new instance gets a Superset SQL Lab database after Argo **Synced** + **Healthy**. Enable addon `templates/gitops/addons/superset/`. Instance detail page: **Create Superset connection** if auto-registration failed. |
 
 Pod env for the app is documented in the repo README (**`GITOPS_REPO_*`** / **`GITOPS_TOKEN`** mapping).
 
@@ -181,6 +224,7 @@ Validated examples: [`examples/instances/`](../examples/instances/).
 | `make image-build` | Build `spice-control-plane:latest` from `apps/control-plane` |
 | `make image-load-local` | Load image into Kind (when overriding chart away from GHCR) |
 | `make install-help` | `scripts/install.sh --help` |
+| `make gitops-push-gitea` | Re-push materialized GitOps tree to local Gitea (Kind lab) |
 
 ---
 
@@ -215,8 +259,9 @@ Validated examples: [`examples/instances/`](../examples/instances/).
 
 1. Open the control plane URL (default `control-plane.127.0.0.1.nip.io`).
 2. Use **Instances** to add Spice deployments (writes to GitOps `instances/`).
-3. Use **Vault** panel for instance secrets (KV under `spice/instances/<name>`); chart `ExternalSecret` syncs into the cluster.
-4. **`/admin`:** paste `ADMIN_API_KEY` for stack summary, cost views, and Argo actions.
+3. On the instance detail page, **Superset connection** shows Argo readiness and whether a Superset database was created (when `env.supersetUrl` is configured on the control plane).
+4. Use **Vault** panel for instance secrets (KV under `spice/instances/<name>`); chart `ExternalSecret` syncs into the cluster.
+5. **`/admin`:** paste `ADMIN_API_KEY` for stack summary, cost views, and Argo actions.
 
 ### Phase F — Optional hardening and observability
 
@@ -257,7 +302,10 @@ See the large **Troubleshooting** table in **[docs/tutorial.md](tutorial.md)** (
 | Document | Content |
 |----------|---------|
 | [README.md](../README.md) | Product vs GitOps, CI, releases |
+| [CHANGELOG.md](../CHANGELOG.md) | Release notes ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)) |
+| [gitops/README.md](../gitops/README.md) | Pointer: runtime GitOps is not in this repo |
 | [docs/tutorial.md](tutorial.md) | Manual Kind + GitOps day-0 with validations |
 | [docs/migration-two-repos.md](migration-two-repos.md) | Moving from monorepo layout |
 | [docs/github-pages-environment.md](github-pages-environment.md) | Pages / Astro env vars |
+| [templates/gitops/README.md](../templates/gitops/README.md) | Template placeholders and materialized layout |
 | [templates/gitops/bootstrap/README.md](../templates/gitops/bootstrap/README.md) | Bootstrap layout notes |

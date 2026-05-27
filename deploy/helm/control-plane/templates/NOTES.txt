@@ -1,5 +1,14 @@
-1. Ensure the `control-plane-secrets` Secret exists in namespace `{{ .Release.Namespace }}` with keys `github_token`, `vault_token`, and `admin_api_key`.
+1. Ensure the `control-plane-secrets` Secret exists in namespace `{{ .Release.Namespace }}` with keys `gitops_token`, `vault_token`, and `admin_api_key`.
 
-2. Open the UI at your ingress host (see `ingress.host` in values).
+{{- if .Values.externalSecret.enabled }}
+2. Seed Vault KV at `{{ .Values.externalSecret.vaultPath }}` (see vault-seed.example.json). ExternalSecret `{{ .Release.Name }}-vault` syncs into Secret `{{ .Values.externalSecret.targetSecretName }}`.
+{{- if .Values.externalSecret.syncSuperset }}
+   Superset integration uses SUPERSET_URL, SUPERSET_USERNAME, SUPERSET_PASSWORD from that Secret.
+{{- end }}
+{{- else if .Values.env.supersetUrl }}
+2. Optional Superset: set env.supersetUrl and secrets.supersetPasswordSecretName, or enable externalSecret.syncSuperset.
+{{- end }}
 
-3. Use `/admin` with the configured admin API key to monitor Argo CD, External Secrets, Vault, and core pods.
+3. Open the UI at your ingress host (see `ingress.host` in values).
+
+4. Use `/admin` with the configured admin API key to monitor Argo CD, External Secrets, Vault, and core pods.

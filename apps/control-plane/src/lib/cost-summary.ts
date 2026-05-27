@@ -1,5 +1,5 @@
-import { assertGitopsRepoConfigured, getSpiceNamespace } from "@/lib/config";
-import { createOctokit, listInstanceNames } from "@/lib/github-service";
+import { getSpiceNamespace } from "@/lib/config";
+import { getValuesYaml, listInstanceNames } from "@/lib/github-service";
 import { listPodsInNamespace, listStatefulSetsInNamespace } from "@/lib/k8s";
 import { parseInstanceValuesYaml } from "@/lib/instance-values";
 import { millicoresToCpuCores, parseCpuToMillicores, parseMemoryToGiB } from "@/lib/k8s-quantity";
@@ -56,8 +56,6 @@ export async function buildCostSummary(): Promise<CostSummary> {
   const pricingFactors = loadPricingFactorsFromEnv();
   const budgets = loadBudgets();
   const names = await listInstanceNames();
-  const octokit = createOctokit();
-  const { owner, repo, branch } = assertGitopsRepoConfigured();
 
   const slugMap = new Map<
     string,
@@ -71,10 +69,12 @@ export async function buildCostSummary(): Promise<CostSummary> {
   let globalUsd = 0;
 
   for (const name of names) {
-    const path = `instances/${name}/values.yaml`;
-    const res = await octokit.repos.getContent({ owner, repo, path, ref: branch });
-    if (Array.isArray(res.data) || res.data.type !== "file" || !("content" in res.data)) continue;
-    const content = Buffer.from(res.data.content, "base64").toString("utf8");
+    let content: string;
+    try {
+      content = (await getValuesYaml(name)).content;
+    } catch {
+      continue;
+    }
     const parsed = parseInstanceValuesYaml(content);
     if (!parsed.ownerLayerSlug) {
       legacy.push(name);
@@ -184,19 +184,11 @@ async function collectLiveSpicePods(): Promise<{
 }
 
 export async function listInstanceSlugSummaries(): Promise<Array<{ name: string; slug: string | null }>> {
-  const octokit = createOctokit();
-  const { owner, repo, branch } = assertGitopsRepoConfigured();
   const names = await listInstanceNames();
   const out: Array<{ name: string; slug: string | null }> = [];
   for (const name of names) {
-    const path = `instances/${name}/values.yaml`;
     try {
-      const res = await octokit.repos.getContent({ owner, repo, path, ref: branch });
-      if (Array.isArray(res.data) || res.data.type !== "file" || !("content" in res.data)) {
-        out.push({ name, slug: null });
-        continue;
-      }
-      const content = Buffer.from(res.data.content, "base64").toString("utf8");
+      const { content } = await getValuesYaml(name);
       const parsed = parseInstanceValuesYaml(content);
       out.push({ name, slug: parsed.ownerLayerSlug });
     } catch {

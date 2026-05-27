@@ -1,0 +1,60 @@
+# On tag v*, package platform tarball (same artifact layout as GitHub release workflow).
+
+name: Release platform bundle
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare bundle
+        id: prep
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          ROOT="spice-platform-${TAG}"
+          mkdir -p "dist/${ROOT}/templates"
+          cp -r templates/gitops "dist/${ROOT}/templates/"
+          cp -r charts deploy scripts/install.sh examples hack "dist/${ROOT}/"
+          [[ -d .gitea ]] && cp -r .gitea "dist/${ROOT}/" || true
+          {
+            echo "SPICE_PLATFORM_RELEASE=${TAG}"
+            echo "SPICE_PRODUCT_REPO=${GITHUB_REPOSITORY}"
+          } > "dist/${ROOT}/RELEASE_META.env"
+          sed -i "s/^SPICE_PACKAGED_RELEASE=.*/SPICE_PACKAGED_RELEASE=\"${TAG}\"/" "dist/${ROOT}/install.sh"
+          tar czvf "spice-platform-${TAG}.tar.gz" -C dist "${ROOT}"
+          sha256sum "spice-platform-${TAG}.tar.gz" > "spice-platform-${TAG}.tar.gz.sha256"
+
+      - name: Create Gitea release and upload assets
+        env:
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+          TOKEN: ${{ github.token }}
+          BASE: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          api="${BASE%/}/api/v1/repos/${REPO}/releases"
+          body=$(jq -n --arg t "$TAG" '{tag_name:$t, name:$t, draft:false}')
+          rel=$(curl -fsSL -X POST -H "Authorization: token ${TOKEN}" -H "Content-Type: application/json" \
+            -d "${body}" "${api}")
+          rid=$(echo "${rel}" | jq -r '.id')
+          up="${BASE%/}/api/v1/repos/${REPO}/releases/${rid}/assets"
+          for f in spice-platform-${TAG}.tar.gz spice-platform-${TAG}.tar.gz.sha256; do
+            curl -fsSL -X POST -H "Authorization: token ${TOKEN}" \
+              -H "Accept: application/json" \
+              -F "attachment=@${f}" \
+              "${up}?name=$(basename "${f}")"
+          done

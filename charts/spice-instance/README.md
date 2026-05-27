@@ -54,6 +54,8 @@ When `externalSecret.enabled: true`, this chart renders an `ExternalSecret` that
 
 **Prerequisite:** that `ClusterSecretStore` must exist on the cluster (for this repo, apply [`templates/gitops/bootstrap/manifests/cluster-secret-store.yaml`](../../templates/gitops/bootstrap/manifests/cluster-secret-store.yaml) during bootstrap; see `docs/tutorial.md`). If the store is missing, `ExternalSecret` stays **Degraded** with `ClusterSecretStore ... not found`.
 
+The Vault KV path must contain **at least one key** (the chart uses `dataFrom.extract`). An empty or missing path can leave the `ExternalSecret` **Degraded** until you write data (see [`examples/instances/example/vault-seed.json`](../../examples/instances/example/vault-seed.json)).
+
 Regenerate vendored dependency (if you bump the version in `Chart.yaml`):
 
 ```bash

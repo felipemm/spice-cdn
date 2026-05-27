@@ -1,0 +1,109 @@
+# Optional: Argo CD Application for Apache Superset (Kind-friendly ingress + bundled Postgres/Redis).
+# Keep `helm.values` in sync with values-kind.yaml (same pattern as OpenCost / kube-prometheus-stack).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: superset
+  namespace: argocd
+  annotations:
+    # After OpenCost; independent of Prometheus.
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  project: default
+  source:
+    chart: superset
+    repoURL: https://apache.github.io/superset
+    targetRevision: 0.15.5
+    helm:
+      releaseName: superset
+      values: |
+        extraSecretEnv:
+          SUPERSET_SECRET_KEY: "spice-kind-lab-superset-secret-key-change-me"
+
+        bootstrapScript: |
+          #!/bin/bash
+          # Lean image: /app/.venv has no pip module; use system pip --target into the venv site-packages.
+          # flightsql-dbapi==0.2.2 needs --no-deps or SQLAlchemy 1.4 breaks Superset 5.
+          PY="/app/.venv/bin/python"
+          PIP="/usr/local/bin/pip"
+          if [ ! -x "${PY}" ]; then
+            echo "error: ${PY} not found" >&2
+            exit 1
+          fi
+          if [ ! -x "${PIP}" ]; then
+            PIP="$(command -v pip || true)"
+          fi
+          if [ -z "${PIP}" ] || [ ! -x "${PIP}" ]; then
+            echo "error: pip not found (need /usr/local/bin/pip)" >&2
+            exit 1
+          fi
+          SITE="$("${PY}" -c 'import site; print(site.getsitepackages()[0])')"
+          NEED_DEPS=0
+          if [ ! -f /tmp/.spice_superset_lab_pip_deps_v6 ]; then NEED_DEPS=1; fi
+          if ! "${PY}" -c "import flightsql.sqlalchemy" 2>/dev/null; then NEED_DEPS=1; fi
+          if [ "${NEED_DEPS}" = 1 ]; then
+            "${PIP}" install --no-cache-dir --target "${SITE}" 'psycopg2-binary>=2.9.9,<3' \
+              || { echo "error: psycopg2-binary install failed" >&2; exit 1; }
+            "${PY}" -c "import psycopg2" \
+              || { echo "error: psycopg2 not importable from ${PY}" >&2; exit 1; }
+            "${PIP}" install --no-cache-dir --target "${SITE}" --no-deps 'flightsql-dbapi==0.2.2' \
+              || echo "warning: flightsql-dbapi failed (Spice SQL Lab may be unavailable)" >&2
+            "${PIP}" install --no-cache-dir --target "${SITE}" --upgrade 'protobuf>=4.21,<6' 'google-auth>=2.0' \
+              || echo "warning: protobuf/google-auth install failed (flightsql may not load)" >&2
+            "${PY}" -c "import flightsql.sqlalchemy" \
+              || echo "warning: flightsql.sqlalchemy not importable (Spice SQL Lab may be unavailable)" >&2
+            "${PY}" -c "import pathlib; pathlib.Path('${SITE}/sitecustomize.py').write_text('try:\n    import flightsql.sqlalchemy  # noqa: F401\nexcept ImportError:\n    pass\n')"
+            touch /tmp/.spice_superset_lab_pip_deps_v6
+            rm -f /tmp/.spice_superset_lab_pip_deps_v5
+          fi
+          if [ ! -f ~/bootstrap ]; then echo "Running Superset with uid {{ .Values.runAsUser }}" > ~/bootstrap; fi
+
+        ingress:
+          enabled: true
+          ingressClassName: nginx
+          hosts:
+            - superset.127.0.0.1.nip.io
+          path: /
+          pathType: Prefix
+          annotations:
+            nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+            nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+            nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+
+        postgresql:
+          primary:
+            persistence:
+              enabled: false
+
+        init:
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+
+        supersetNode:
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+
+        supersetWorker:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1536Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: superset
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

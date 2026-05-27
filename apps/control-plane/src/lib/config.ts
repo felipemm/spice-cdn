@@ -6,7 +6,19 @@ export function requireEnv(name: string): string {
   return v;
 }
 
-/** GitOps repository (where `instances/*` live) — GitHub API / Octokit. */
+/** `github` → GitHub REST (Octokit). `gitea` → in-cluster Gitea (Kind lab); requires GITOPS_GITEA_API_BASE_URL. */
+export function getGitopsBackend(): "github" | "gitea" {
+  const b = (process.env.GITOPS_BACKEND ?? "github").toLowerCase().trim();
+  if (b === "gitea") return "gitea";
+  return "github";
+}
+
+/** e.g. http://gitea-http.gitea.svc.cluster.local:3000/api/v1 (no trailing slash) */
+export function getGiteaApiBaseUrl(): string {
+  return (process.env.GITOPS_GITEA_API_BASE_URL ?? "").trim().replace(/\/$/, "");
+}
+
+/** GitOps repository (where `instances/*` live) — GitHub API / Octokit or Gitea REST. */
 export function getGitopsRepoConfig() {
   const token = process.env.GITOPS_TOKEN ?? process.env.GITHUB_TOKEN ?? "";
   const owner = process.env.GITOPS_REPO_OWNER ?? process.env.GITHUB_OWNER ?? "";
@@ -20,6 +32,11 @@ export function assertGitopsRepoConfigured() {
   if (!c.token || !c.owner || !c.repo) {
     throw new Error(
       "GitOps repo is not configured (GITOPS_TOKEN, GITOPS_REPO_OWNER, GITOPS_REPO_NAME). Legacy GITHUB_* vars are still accepted.",
+    );
+  }
+  if (getGitopsBackend() === "gitea" && !getGiteaApiBaseUrl()) {
+    throw new Error(
+      "GITOPS_GITEA_API_BASE_URL is required when GITOPS_BACKEND=gitea (e.g. http://gitea-http.gitea.svc.cluster.local:3000/api/v1).",
     );
   }
   return c;

@@ -10,3 +10,5 @@ If you previously kept `gitops/apps` and `instances/*` **in this product reposit
 6. Set the control-plane workload env to the same org/repo (`GITOPS_REPO_*`) and mount a PAT with **contents:write** on the GitOps repo (`gitops_token` key by default).
 
 CI in this product repo now validates only `examples/instances/*/values.yaml`.
+
+For release history after the split, see [CHANGELOG.md](../CHANGELOG.md).

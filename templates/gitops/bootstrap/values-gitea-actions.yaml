@@ -1,0 +1,24 @@
+# Gitea Actions act_runner (official chart: gitea-charts/actions).
+# Installed by scripts/install.sh for the local Kind + Gitea lab (namespace gitea-actions by default).
+#
+# See: https://gitea.com/gitea/helm-actions
+enabled: true
+
+# In-cluster URL the runner uses to register and poll jobs (must match Gitea HTTP Service).
+# Default matches SPICE_GITEA_RELEASE=gitea → Service gitea-http. If you change the Helm release name, update this URL.
+giteaRootURL: "http://gitea-http.gitea.svc.cluster.local:3000"
+
+# scripts/install.sh creates this Secret with key runner-token from the admin API registration token.
+existingSecret: gitea-actions-runner-secret
+existingSecretKey: runner-token
+
+statefulset:
+  replicas: 1
+  persistence:
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 2Gi

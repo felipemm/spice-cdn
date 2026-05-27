@@ -14,7 +14,6 @@ spec:
     namespace: control-plane
   source:
     repoURL: __GITOPS_REPO_HTTPS_URL__
-__GITOPS_APP_INSECURE__
     targetRevision: __GITOPS_TARGET_REVISION__
     path: deploy/helm/control-plane
     helm:

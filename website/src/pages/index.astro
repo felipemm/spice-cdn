@@ -1,198 +1,284 @@
 ---
-// Hermes-inspired marketing shell; Starlight docs live under /guides/* when base is /.
+import "../styles/home.css";
+
+const base = import.meta.env.BASE_URL;
+const docs = (slug: string) => `${base}${slug}`.replace(/\/{2,}/g, "/");
+const productRepo = "https://github.com/felipemm/spice-cdn";
 ---
+
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Spice CDN — GitOps control plane</title>
+    <title>Spice CDN — GitOps platform for Spice.ai on Kubernetes</title>
     <meta
       name="description"
-      content="Kind-first Spice.ai platform: product repo vs your GitOps repo, Argo CD, Vault, installer pinned to releases."
+      content="Run Spice.ai on Kubernetes with a GitOps control plane: one-command Kind installer, Argo CD, Vault secrets, and a web UI to manage instances in your own GitOps repo."
     />
+    <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <style>
-      :root {
-        color-scheme: dark;
-        --bg: #0b0f14;
-        --fg: #e8eef7;
-        --muted: #9fb0c8;
-        --accent: #6ee7ff;
-        --card: #121922;
-        --border: #223044;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        font-family: Inter, system-ui, -apple-system, sans-serif;
-        background: radial-gradient(1200px 600px at 20% -10%, #1a2740 0%, var(--bg) 55%);
-        color: var(--fg);
-        min-height: 100vh;
-      }
-      header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 1.25rem 2rem;
-        border-bottom: 1px solid var(--border);
-        backdrop-filter: blur(8px);
-        position: sticky;
-        top: 0;
-        background: rgba(11, 15, 20, 0.85);
-      }
-      nav a {
-        color: var(--muted);
-        text-decoration: none;
-        margin-left: 1.25rem;
-        font-weight: 500;
-      }
-      nav a:hover {
-        color: var(--fg);
-      }
-      .hero {
-        max-width: 960px;
-        margin: 0 auto;
-        padding: 4rem 1.5rem 3rem;
-        text-align: center;
-      }
-      .eyebrow {
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        font-size: 0.75rem;
-        color: var(--muted);
-      }
-      h1 {
-        font-size: clamp(2rem, 4vw, 3rem);
-        line-height: 1.1;
-        margin: 0.75rem 0 1rem;
-        background: linear-gradient(120deg, #fff 0%, #9bd8ff 45%, var(--accent) 100%);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-      }
-      .lead {
-        color: var(--muted);
-        font-size: 1.1rem;
-        max-width: 640px;
-        margin: 0 auto 2rem;
-        line-height: 1.6;
-      }
-      .steps {
-        display: grid;
-        gap: 1rem;
-        max-width: 720px;
-        margin: 0 auto 3rem;
-        text-align: left;
-      }
-      .step {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 1rem 1.25rem;
-      }
-      .step strong {
-        color: var(--accent);
-      }
-      pre {
-        background: #0a0d12;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 0.85rem 1rem;
-        overflow-x: auto;
-        font-size: 0.85rem;
-      }
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 1rem;
-        max-width: 1000px;
-        margin: 0 auto 4rem;
-        padding: 0 1.5rem;
-      }
-      .card {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 1.25rem;
-      }
-      .card h3 {
-        margin: 0 0 0.5rem;
-        font-size: 1rem;
-      }
-      .card p {
-        margin: 0;
-        color: var(--muted);
-        font-size: 0.9rem;
-        line-height: 1.5;
-      }
-      footer {
-        border-top: 1px solid var(--border);
-        padding: 2rem;
-        text-align: center;
-        color: var(--muted);
-        font-size: 0.85rem;
-      }
-    </style>
   </head>
   <body>
-    <header>
-      <strong>Spice CDN</strong>
-      <nav>
-        <a href={`${import.meta.env.BASE_URL}guides/install/`}>Install</a>
-        <a href={`${import.meta.env.BASE_URL}guides/architecture/`}>Architecture</a>
-        <a href="https://github.com/">Source</a>
-      </nav>
+    <header class="site-header">
+      <div class="shell">
+        <a class="brand" href={base}>
+          <span class="brand-mark" aria-hidden="true"></span>
+          Spice CDN
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+          <a href="#features">Features</a>
+          <a href="#how-it-works">How it works</a>
+          <a href={docs("guides/user-guide/")}>Docs</a>
+          <a href={docs("guides/install/")} class="nav-cta">Get started</a>
+        </nav>
+      </div>
     </header>
-    <section class="hero">
-      <div class="eyebrow">Open platform · Kind-first</div>
-      <h1>Product code and your deployment, decoupled.</h1>
-      <p class="lead">
-        This site ships <code>install.sh</code> pinned to a GitHub Release. Argo CD syncs <strong>your</strong> GitOps
-        repository — never the product repo — so upgrades and instance YAML stay in your org.
-      </p>
-      <div class="steps">
-        <div class="step"><strong>1.</strong> Create an empty GitOps repo and a classic PAT with <code>repo</code> scope.</div>
-        <div class="step"><strong>2.</strong> Run the installer (downloads the pinned release tarball and materializes GitOps).</div>
-        <div class="step"><strong>3.</strong> Push the generated tree to your GitOps repo and let Argo reconcile.</div>
+
+    <main>
+      <section class="hero shell">
+        <p class="eyebrow">Open platform · Kind-first · GitOps-native</p>
+        <h1>Spice.ai on Kubernetes, owned by your GitOps repo</h1>
+        <p class="lead">
+          Spice CDN is a <strong>product platform</strong> that ships a control-plane UI, Helm charts, and a
+          release-pinned installer. You keep a <strong>separate GitOps repository</strong> as the source of truth —
+          Argo CD reconciles instances, secrets, and upgrades without coupling your org to upstream product code.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href={docs("guides/install/")}>Install guide</a>
+          <a class="btn btn-secondary" href={docs("guides/architecture/")}>Architecture</a>
+          <a class="btn btn-secondary" href={productRepo} target="_blank" rel="noopener noreferrer">GitHub</a>
+        </div>
+        <div class="install-block">
+          <p class="install-label">Quick install</p>
+          <div class="install-row">
+            <pre id="install-cmd" aria-label="Install command">curl -fsSL …/install.sh | bash</pre>
+            <button type="button" class="copy-btn" id="copy-install" aria-label="Copy install command">
+              Copy
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section shell" id="product">
+        <div class="section-header">
+          <h2>What is Spice CDN?</h2>
+          <p>
+            A batteries-included way to operate <a href="https://spiceai.org" target="_blank" rel="noopener noreferrer"
+              >Spice.ai</a
+            > workloads on Kubernetes with enterprise-style delivery: Git-backed config, continuous sync, and secrets
+            from Vault.
+          </p>
+        </div>
+        <div class="split">
+          <div class="prose">
+            <h3>The problem it solves</h3>
+            <p>
+              Running data platforms in Kubernetes usually means stitching charts, ingress, secrets, and deployment
+              workflows yourself. Spice CDN packages those concerns into a repeatable lab and production-shaped path:
+              bootstrap a cluster, materialize a GitOps tree, push to <em>your</em> repo, and manage Spice instances from
+              a web UI.
+            </p>
+            <h3>Two repositories, one clear boundary</h3>
+            <ul>
+              <li><strong>Product repo</strong> — application source, charts, <code>install.sh</code>, CI, and this docs site.</li>
+              <li><strong>Your GitOps repo</strong> — what Argo CD syncs: <code>instances/*</code>, platform apps, and pinned chart copies.</li>
+            </ul>
+            <p>Upgrades download a new release tarball; your instance YAML and org policies stay in GitOps.</p>
+          </div>
+          <div class="diagram" id="how-it-works">
+            <p style="margin: 0 0 1rem; font-weight: 600; color: var(--fg)">End-to-end flow</p>
+            <div class="flow">
+              <div class="flow-step">
+                <span class="flow-num">1</span>
+                <span>Create an empty GitOps repo + PAT with <code>repo</code> scope</span>
+              </div>
+              <div class="flow-arrow" aria-hidden="true">↓</div>
+              <div class="flow-step">
+                <span class="flow-num">2</span>
+                <span
+                  ><code>install.sh</code> downloads a pinned release and materializes charts + Argo manifests into a
+                  local tree</span
+                >
+              </div>
+              <div class="flow-arrow" aria-hidden="true">↓</div>
+              <div class="flow-step">
+                <span class="flow-num">3</span>
+                <span>Kind cluster + ingress, Vault, External Secrets, Argo CD bootstrap</span>
+              </div>
+              <div class="flow-arrow" aria-hidden="true">↓</div>
+              <div class="flow-step">
+                <span class="flow-num">4</span>
+                <span>Push GitOps → Argo syncs control plane and Spice instances</span>
+              </div>
+              <div class="flow-arrow" aria-hidden="true">↓</div>
+              <div class="flow-step">
+                <span class="flow-num">5</span>
+                <span>Control plane writes instance YAML via Git API; cluster reconciles automatically</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="stack-row" aria-label="Platform stack">
+          <span class="pill">Kind</span>
+          <span class="pill">Argo CD</span>
+          <span class="pill">Vault</span>
+          <span class="pill">External Secrets</span>
+          <span class="pill">ingress-nginx</span>
+          <span class="pill">Helm</span>
+          <span class="pill">Next.js control plane</span>
+          <span class="pill">Spice.ai</span>
+        </div>
+      </section>
+
+      <section class="section shell" id="features">
+        <div class="section-header">
+          <h2>Main features</h2>
+          <p>Everything you need to go from zero to queryable Spice endpoints — with ops patterns built in.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">⚡</div>
+            <h3>One-command installer</h3>
+            <p>
+              <code>curl … | bash</code> pulls a GitHub Release tarball, substitutes GitOps placeholders, and bootstraps
+              a Kind lab. Override version with <code>SPICE_RELEASE</code> or upgrade with <code>install.sh --upgrade</code>.
+            </p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">🎛️</div>
+            <h3>Control plane UI</h3>
+            <p>
+              Next.js app to list, create, and edit Spice instances. Changes commit to folders under
+              <code>instances/&lt;name&gt;/</code> in your GitOps repo via the GitHub Contents API (Gitea supported for
+              local labs).
+            </p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">🔄</div>
+            <h3>GitOps continuous delivery</h3>
+            <p>
+              Argo CD ApplicationSet deploys the control plane and each Spice instance from the same GitOps repository
+              Argo never reads the product repo directly.
+            </p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">🔐</div>
+            <h3>Vault &amp; External Secrets</h3>
+            <p>
+              Dev-mode Vault plus ESO wire dataset credentials from Vault KV into Kubernetes Secrets consumed by Spice
+              pods — no secrets in Git.
+            </p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">📦</div>
+            <h3>Helm charts included</h3>
+            <p>
+              <code>charts/spice-instance</code> wraps upstream Spice on Kubernetes; <code>deploy/helm/control-plane</code>
+              ships the UI, optional MCP sidecar, cost views, and Superset integration hooks.
+            </p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">📊</div>
+            <h3>Observability &amp; BI (optional)</h3>
+            <p>
+              Add-on templates for OpenCost budgets, Grafana/Prometheus stack, and Apache Superset SQL Lab databases
+              per instance — enabled when you need them in GitOps.
+            </p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">🤖</div>
+            <h3>MCP sidecar</h3>
+            <p>
+              Optional FastMCP server exposes platform operations to AI assistants — manage instances and cluster context
+              from compatible MCP clients.
+            </p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon" aria-hidden="true">✅</div>
+            <h3>Validated examples &amp; CI</h3>
+            <p>
+              <code>examples/instances/</code> are linted in CI; copy patterns for Databricks, S3, and local dev without
+              guessing required labels like <code>ownerLayerSlug</code>.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section shell" id="get-started">
+        <div class="section-header">
+          <h2>Get started in minutes</h2>
+          <p>Three steps after you have Docker, Kind, and an empty GitOps repository.</p>
+        </div>
+        <div class="steps">
+          <div class="step-card">
+            <strong>1</strong>
+            <span
+              >Create an empty GitHub (or Gitea) GitOps repo and a token with <code>repo</code> / contents write access.</span
+            >
+          </div>
+          <div class="step-card">
+            <strong>2</strong>
+            <span
+              >Run the installer — interactive prompts or set <code>GITOPS_REPO_URL</code>, <code>GITOPS_PAT</code>, and
+              <code>YES=1</code> for automation.</span
+            >
+          </div>
+          <div class="step-card">
+            <strong>3</strong>
+            <span
+              >Push the materialized tree, sync <code>platform-gitops</code> in Argo CD, then open the control plane and
+              create your first Spice instance.</span
+            >
+          </div>
+        </div>
+        <p style="text-align: center; margin-top: 2rem">
+          <a class="btn btn-primary" href={docs("guides/user-guide/")}>Read the full user guide</a>
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="shell">
+        <p>
+          <a href={productRepo}>felipemm/spice-cdn</a> · Apache 2.0 · Built with Astro + Starlight
+        </p>
+        <p>
+          Deploying to GitHub Pages? Set <code>PUBLIC_ASTRO_SITE</code> and <code>PUBLIC_ASTRO_BASE</code> at build time
+          for project-site paths.
+        </p>
       </div>
-      <p class="eyebrow">Quick install</p>
-      <pre id="install-cmd">curl -fsSL …/install.sh | bash</pre>
-    </section>
-    <section class="grid">
-      <div class="card">
-        <h3>Release-pinned</h3>
-        <p>Install bundles come from GitHub Releases with checksums; override with <code>SPICE_RELEASE</code>.</p>
-      </div>
-      <div class="card">
-        <h3>Auto-upgrade path</h3>
-        <p>Use <code>install.sh --upgrade</code> or Renovate on your GitOps repo to bump <code>platform-version.yaml</code>.</p>
-      </div>
-      <div class="card">
-        <h3>Uninstall</h3>
-        <p><code>install.sh --uninstall --all</code> removes the Kind cluster created by the script.</p>
-      </div>
-    </section>
-    <footer>
-      Set <code>PUBLIC_ASTRO_SITE</code> and <code>PUBLIC_ASTRO_BASE</code> when building for GitHub Pages (project sites need a
-      non-root base).
     </footer>
+
     <script
       define:vars={{
         baseUrl: import.meta.env.BASE_URL,
       }}
     >
       const pre = document.getElementById("install-cmd");
+      const copyBtn = document.getElementById("copy-install");
       if (pre) {
         const b = (baseUrl || "/").replace(/\/$/, "");
-        pre.textContent = `curl -fsSL ${window.location.origin}${b}/install.sh | bash`;
+        const cmd = `curl -fsSL ${window.location.origin}${b}/install.sh | bash`;
+        pre.textContent = cmd;
+        copyBtn?.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(cmd);
+            copyBtn.textContent = "Copied!";
+            copyBtn.classList.add("copied");
+            setTimeout(() => {
+              copyBtn.textContent = "Copy";
+              copyBtn.classList.remove("copied");
+            }, 2000);
+          } catch {
+            copyBtn.textContent = "Select & copy";
+          }
+        });
       }
     </script>
   </body>

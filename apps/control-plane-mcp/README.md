@@ -14,6 +14,8 @@ It is intended to run **inside the cluster** as a **sidecar** in the `control-pl
 | `get_spice_instance` | `GET /api/instances/:name` |
 | `delete_spice_instance` | `DELETE /api/instances/:name` |
 | `get_spice_instance_argo` | `GET /api/instances/:name/argo` |
+| `get_spice_instance_superset_status` | `GET /api/instances/:name/superset` |
+| `register_spice_instance_superset` | `POST /api/instances/:name/superset` |
 
 ## Environment
 

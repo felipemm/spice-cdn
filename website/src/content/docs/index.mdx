@@ -1,40 +1,40 @@
 ---
-title: Welcome to Starlight
-description: Get started building your docs site with Starlight.
-template: splash # Remove or comment out this line to display the site sidebar on this page.
+title: Spice CDN documentation
+description: Guides for installing and operating the Spice GitOps platform on Kubernetes.
+template: splash
 hero:
-  tagline: Congrats on setting up a new Starlight project!
-  image:
-    file: ../../assets/houston.webp
+  tagline: GitOps control plane for Spice.ai — install, architecture, and day-2 operations.
   actions:
-    - text: Example Guide
-      link: /guides/example/
+    - text: User guide
+      link: /guides/user-guide/
       icon: right-arrow
-    - text: Read the Starlight docs
-      link: https://starlight.astro.build
+    - text: Install
+      link: /guides/install/
+      icon: rocket
+    - text: Product vs GitOps
+      link: /guides/architecture/
+      icon: document
+    - text: Project homepage
+      link: /
       icon: external
       variant: minimal
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-## Next steps
+## Documentation
 
 <CardGrid stagger>
-	<Card title="Update content" icon="pencil">
-		Edit `src/content/docs/index.mdx` to see this page change.
+	<Card title="User guide" icon="open-book">
+		Quick start, optional installer settings, UIs, and instance management — [read the guide](/guides/user-guide/).
 	</Card>
-	<Card title="Change page layout" icon="document">
-		Delete `template: splash` in `src/content/docs/index.mdx` to display a
-		sidebar on this page.
+	<Card title="Install" icon="rocket">
+		Flags, environment variables, materialize-only and upgrade flows — [install reference](/guides/install/).
 	</Card>
-	<Card title="Add new content" icon="add-document">
-		Add Markdown or MDX files to `src/content/docs` to create new pages.
+	<Card title="Product vs GitOps" icon="document">
+		Two-repository model, materialized tree layout, and control-plane API — [architecture](/guides/architecture/).
 	</Card>
-	<Card title="Configure your site" icon="setting">
-		Edit your `sidebar` and other config in `astro.config.mjs`.
-	</Card>
-	<Card title="Read the docs" icon="open-book">
-		Learn more in [the Starlight Docs](https://starlight.astro.build/).
+	<Card title="Marketing homepage" icon="star">
+		Product overview and feature summary — [back to site root](/).
 	</Card>
 </CardGrid>

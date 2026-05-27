@@ -1,32 +1,27 @@
-import { NextResponse } from "next/server";
-import { assertGitopsRepoConfigured } from "@/lib/config";
-import {
-  createInstance,
-  createOctokit,
-  listInstanceNames,
-  listInstancesWithUrls,
-} from "@/lib/github-service";
+import { NextResponse, after } from "next/server";
+import { createInstance, getValuesYaml, listInstanceNames, listInstancesWithUrls } from "@/lib/github-service";
 import { renderInstanceTemplate } from "@/lib/instance-template";
 import { assertValidOwnerLayerSlug, parseInstanceValuesYaml } from "@/lib/instance-values";
 import { getBudgetForSlug, loadBudgetsFromFile } from "@/lib/budgets";
 import { estimateMonthlyUsd, loadPricingFactorsFromEnv } from "@/lib/aws-pricing";
 import { listInstanceSlugSummaries } from "@/lib/cost-summary";
+import { isSupersetIntegrationReady, registerSpiceInstanceInSupersetWhenReady } from "@/lib/superset-service";
 
 function budgetsPath(): string {
   return process.env.BUDGETS_FILE ?? "/config/budgets.yaml";
 }
 
 async function declaredMonthlyForSlug(slug: string): Promise<number> {
-  const octokit = createOctokit();
-  const { owner, repo, branch } = assertGitopsRepoConfigured();
   const names = await listInstanceNames();
   const pricing = loadPricingFactorsFromEnv();
   let sum = 0;
   for (const name of names) {
-    const path = `instances/${name}/values.yaml`;
-    const res = await octokit.repos.getContent({ owner, repo, path, ref: branch });
-    if (Array.isArray(res.data) || res.data.type !== "file" || !("content" in res.data)) continue;
-    const content = Buffer.from(res.data.content, "base64").toString("utf8");
+    let content: string;
+    try {
+      content = (await getValuesYaml(name)).content;
+    } catch {
+      continue;
+    }
     const p = parseInstanceValuesYaml(content);
     if (p.ownerLayerSlug !== slug) continue;
     sum += estimateMonthlyUsd(p.cpuCores, p.memoryGiB, pricing);
@@ -98,7 +93,16 @@ export async function POST(request: Request) {
 
     const yaml = renderInstanceTemplate(name, ownerLayerSlug);
     await createInstance(name, yaml);
-    return NextResponse.json({ ok: true, name, ownerLayerSlug });
+
+    let superset: { pending: true } | undefined;
+    if (isSupersetIntegrationReady()) {
+      after(async () => {
+        await registerSpiceInstanceInSupersetWhenReady(name);
+      });
+      superset = { pending: true };
+    }
+
+    return NextResponse.json({ ok: true, name, ownerLayerSlug, superset });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

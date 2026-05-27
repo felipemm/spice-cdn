@@ -1,0 +1,31 @@
+name: Validate instance values
+
+on:
+  pull_request:
+    paths:
+      - "examples/instances/**/values.yaml"
+      - "charts/spice-instance/**"
+  push:
+    branches: [main]
+    paths:
+      - "examples/instances/**/values.yaml"
+
+jobs:
+  instances:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+      - name: Validate instance Helm values
+        run: |
+          set -euo pipefail
+          for f in examples/instances/*/values.yaml; do
+            echo "---- $f"
+            grep -qE '^ownerLayerSlug:' "$f" || { echo "missing ownerLayerSlug in $f"; exit 1; }
+            grep -qE 'owner-layer-slug:' "$f" || { echo "missing owner-layer-slug label mapping in $f"; exit 1; }
+            name=$(basename "$(dirname "$f")")
+            helm template "lint-$name" charts/spice-instance -f "$f" --namespace spice-instances >/dev/null
+          done

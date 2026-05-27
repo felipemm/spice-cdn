@@ -18,8 +18,9 @@ mcp = FastMCP(
     "Spice Control Plane",
     instructions=(
         "Manage Spice.ai GitOps instances through the Next.js control plane: list, create, "
-        "read values.yaml, delete, and inspect Argo CD Application status. Creating an instance "
-        "commits to Git; Argo CD reconciles the cluster."
+        "read values.yaml, delete, inspect Argo CD Application status, and register Superset "
+        "SQL Lab databases (Flight SQL) after deploy is ready. Creating an instance commits to "
+        "Git; Argo CD reconciles the cluster."
     ),
 )
 
@@ -124,6 +125,28 @@ def get_spice_instance_argo(name: str) -> str:
     """GET /api/instances/<name>/argo — Argo CD Application for spice-<name>."""
     seg = quote(name.strip(), safe="")
     return _json_tool(_fetch("GET", f"/api/instances/{seg}/argo"))
+
+
+@mcp.tool()
+def get_spice_instance_superset_status(name: str) -> str:
+    """GET /api/instances/<name>/superset — Argo readiness + Superset database registration status."""
+    seg = quote(name.strip(), safe="")
+    return _json_tool(_fetch("GET", f"/api/instances/{seg}/superset"))
+
+
+@mcp.tool()
+def register_spice_instance_superset(name: str, wait_for_ready: bool = True) -> str:
+    """
+    POST /api/instances/<name>/superset — create Superset SQL Lab database for this instance.
+
+    Args:
+        name: Instance name.
+        wait_for_ready: When true (default), wait for Argo Synced+Healthy before registering.
+    """
+    seg = quote(name.strip(), safe="")
+    return _json_tool(
+        _fetch("POST", f"/api/instances/{seg}/superset", {"waitForReady": wait_for_ready}),
+    )
 
 
 def main() -> None:

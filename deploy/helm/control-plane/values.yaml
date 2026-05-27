@@ -16,7 +16,10 @@ ingress:
   host: control-plane.127.0.0.1.nip.io
   annotations: {}
 env:
-  # Git repository where Argo syncs instance values (operator-owned GitOps repo). Octokit uses GitHub API.
+  # Git repository where Argo syncs instance values. github → GitHub API; gitea → Kind in-cluster Gitea REST.
+  gitopsBackend: github
+  # When gitopsBackend is gitea, e.g. http://gitea-http.gitea.svc.cluster.local:3000/api/v1
+  gitopsGiteaApiBaseUrl: ""
   gitopsRepoOwner: felipemm
   gitopsRepoName: spice-cdn
   gitopsRepoBranch: main
@@ -26,6 +29,22 @@ env:
   # Argo CD namespace (for Kubernetes API reads / sync patches)
   argocdNamespace: argocd
   spiceNamespace: spice-instances
+  # Kind lab defaults for the /cluster-urls page (nip.io + ingress-nginx on :80).
+  kindLabIngressRoot: 127.0.0.1.nip.io
+  kindLabIngressScheme: http
+  # Optional: register each new Spice instance as a Superset SQL Lab database (Flight SQL / datafusion+flightsql).
+  # Prefer externalSecret.syncSuperset (Vault KV spice/control-plane) over inline env + K8s Secret keys below.
+  supersetUrl: ""
+  supersetUsername: admin
+# Sync control-plane runtime config from Vault via External Secrets (ClusterSecretStore vault-backend).
+externalSecret:
+  enabled: false
+  clusterSecretStoreName: vault-backend
+  vaultPath: spice/control-plane
+  targetSecretName: control-plane-env
+  refreshInterval: 1m
+  # When true, mount SUPERSET_URL, SUPERSET_USERNAME, SUPERSET_PASSWORD from the ESO target Secret.
+  syncSuperset: false
 resources:
   limits:
     memory: 512Mi
@@ -48,6 +67,9 @@ secrets:
   vaultTokenSecretKey: vault_token
   adminApiKeySecretName: control-plane-secrets
   adminApiKeySecretKey: admin_api_key
+  # When set (and env.supersetUrl), mount SUPERSET_PASSWORD for Superset REST login (e.g. same Secret as admin API key).
+  supersetPasswordSecretName: ""
+  supersetPasswordSecretKey: superset_password
 # Optional: pin namespace on every manifest (must match Argo Application destination.namespace).
 # Leave empty to use .Release.Namespace when the Helm engine sets it.
 targetNamespace: ""

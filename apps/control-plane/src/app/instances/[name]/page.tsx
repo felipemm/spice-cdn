@@ -1,8 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { ValuesEditor } from "@/components/ValuesEditor";
+
+type SupersetStatusResponse = {
+  integrationReady?: boolean;
+  reason?: string;
+  deployReady?: boolean;
+  registered?: boolean;
+  argo?: { syncStatus?: string; healthStatus?: string };
+  superset?:
+    | {
+        configured: true;
+        registered: boolean;
+        databaseName: string;
+        sqlalchemyUri: string;
+        databaseId?: number;
+      }
+    | { configured: false; reason: string };
+  error?: string;
+};
 
 export default function InstanceDetailPage() {
   const params = useParams<{ name: string }>();
@@ -13,8 +32,19 @@ export default function InstanceDetailPage() {
   const [sha, setSha] = useState<string | null>(null);
   const [secretsJson, setSecretsJson] = useState("{}");
   const [argo, setArgo] = useState<string>("");
+  const [supersetStatus, setSupersetStatus] = useState<SupersetStatusResponse | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [supersetBusy, setSupersetBusy] = useState(false);
+  const autoRegisterAttempted = useRef(false);
+
+  const loadSupersetStatus = useCallback(async () => {
+    const res = await fetch(`/api/instances/${encodeURIComponent(name)}/superset`);
+    const data = (await res.json()) as SupersetStatusResponse;
+    if (!res.ok) throw new Error(data.error ?? res.statusText);
+    setSupersetStatus(data);
+    return data;
+  }, [name]);
 
   useEffect(() => {
     void (async () => {
@@ -34,6 +64,69 @@ export default function InstanceDetailPage() {
       }
     })();
   }, [name]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        await loadSupersetStatus();
+      } catch (e) {
+        if (!cancelled) {
+          setSupersetStatus({ error: e instanceof Error ? e.message : "Superset status failed" });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadSupersetStatus]);
+
+  const supersetPending =
+    supersetStatus?.integrationReady === true &&
+    supersetStatus.registered !== true;
+
+  useEffect(() => {
+    if (!supersetPending) return;
+    const id = setInterval(() => {
+      void loadSupersetStatus().catch(() => {});
+    }, 5000);
+    return () => clearInterval(id);
+  }, [supersetPending, loadSupersetStatus]);
+
+  const registerSuperset = useCallback(
+    async (waitForReady: boolean) => {
+      setSupersetBusy(true);
+      setMsg(null);
+      try {
+        const res = await fetch(`/api/instances/${encodeURIComponent(name)}/superset`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ waitForReady }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.warning ?? data.error ?? res.statusText);
+        await loadSupersetStatus();
+        if (data.created) {
+          setMsg(`Superset connection created (database id ${data.databaseId}).`);
+        } else if (data.registered) {
+          setMsg("Superset connection already exists.");
+        }
+      } catch (e) {
+        setMsg(e instanceof Error ? e.message : "Superset registration failed");
+      } finally {
+        setSupersetBusy(false);
+      }
+    },
+    [name, loadSupersetStatus],
+  );
+
+  useEffect(() => {
+    if (autoRegisterAttempted.current) return;
+    if (!supersetStatus?.integrationReady || !supersetStatus.deployReady) return;
+    if (supersetStatus.registered) return;
+    autoRegisterAttempted.current = true;
+    void registerSuperset(true);
+  }, [supersetStatus, registerSuperset]);
 
   async function save() {
     setBusy(true);
@@ -91,6 +184,11 @@ export default function InstanceDetailPage() {
     }
   }
 
+  const supersetDb =
+    supersetStatus?.superset && "databaseName" in supersetStatus.superset
+      ? supersetStatus.superset
+      : null;
+
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -136,6 +234,71 @@ export default function InstanceDetailPage() {
         >
           Push to Vault
         </button>
+      </section>
+
+      <section className="space-y-3 rounded border border-neutral-800 bg-neutral-950 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-medium text-neutral-300">Superset connection</h2>
+          {supersetStatus?.integrationReady && (
+            <Link href="/cluster-urls" className="text-xs text-sky-400 hover:underline">
+              Open cluster URLs
+            </Link>
+          )}
+        </div>
+        {supersetStatus?.error && (
+          <p className="text-sm text-red-400">{supersetStatus.error}</p>
+        )}
+        {supersetStatus?.integrationReady === false && (
+          <p className="text-sm text-neutral-400">
+            Superset integration is not configured on the control plane (
+            {supersetStatus.reason ?? "SUPERSET_URL / SUPERSET_PASSWORD missing"}).
+          </p>
+        )}
+        {supersetStatus?.integrationReady && (
+          <dl className="grid gap-2 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-neutral-500">Argo sync</dt>
+              <dd className="font-mono text-neutral-200">
+                {supersetStatus.argo?.syncStatus ?? "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-neutral-500">Argo health</dt>
+              <dd className="font-mono text-neutral-200">
+                {supersetStatus.argo?.healthStatus ?? "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-neutral-500">Deploy ready</dt>
+              <dd className="text-neutral-200">{supersetStatus.deployReady ? "yes" : "no"}</dd>
+            </div>
+            <div>
+              <dt className="text-neutral-500">Superset database</dt>
+              <dd className="font-mono text-neutral-200">
+                {supersetStatus.registered && supersetDb
+                  ? `${supersetDb.databaseName} (id ${supersetDb.databaseId ?? "?"})`
+                  : "not registered"}
+              </dd>
+            </div>
+          </dl>
+        )}
+        {supersetStatus?.integrationReady && !supersetStatus.registered && (
+          <p className="text-xs text-neutral-500">
+            {supersetStatus.deployReady
+              ? "Instance is ready; registering Superset connection…"
+              : "Waiting for Argo CD Synced + Healthy before creating the Superset connection."}
+          </p>
+        )}
+        {supersetStatus?.integrationReady && (
+          <button
+            type="button"
+            onClick={() => void registerSuperset(true)}
+            disabled={busy || supersetBusy || supersetStatus.registered === true}
+            className="rounded bg-violet-700 px-3 py-1.5 text-sm text-white hover:bg-violet-600 disabled:opacity-50"
+          >
+            {supersetBusy ? "Creating…" : "Create Superset connection"}
+          </button>
+        )}
       </section>
 
       <section className="space-y-2">

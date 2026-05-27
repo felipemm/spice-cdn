@@ -34,7 +34,9 @@ For architecture diagrams and the split between product and GitOps, see the repo
 | `curl` | Download release bundle / `install.sh` |
 | `openssl` | Random `admin_api_key` during bootstrap |
 
-**GitHub:** an **empty** GitOps repository (HTTPS URL ending in `.git`) and a **personal access token** with **`repo`** scope on that repository.
+**GitHub (remote GitOps):** an **empty** GitOps repository (HTTPS URL ending in `.git`) and a **personal access token** with **`repo`** scope on that repository.
+
+**Local lab:** omit `--gitops-repo` to use in-cluster Gitea — see [Install](./install#requirements).
 
 ---
 
@@ -119,7 +121,7 @@ curl -sf "http://control-plane.127.0.0.1.nip.io/api/health"
 
 ### Makefile
 
-`make kind-create`, `make kind-delete`, `make image-build`, `make image-load-local`, `make install-help`.
+`make kind-create`, `make kind-delete`, `make image-build`, `make image-load-local`, `make install-help`, `make gitops-push-gitea` (re-push lab GitOps to Gitea).
 
 ---
 
@@ -146,5 +148,7 @@ YES=1 ./scripts/install.sh --uninstall --all
 ## More links
 
 - [Install](./install) — short install reference
+- [Product vs GitOps](./architecture) — two-repo model and GitOps backends
+- [Changelog](../reference/changelog) — release notes
 - [Tutorial](https://github.com/felipemm/spice-cdn/blob/main/docs/tutorial.md) — troubleshooting table
 - [Migration](https://github.com/felipemm/spice-cdn/blob/main/docs/migration-two-repos.md)

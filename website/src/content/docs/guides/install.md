@@ -7,7 +7,7 @@ description: Pin installs to GitHub Releases and bootstrap Kind + Argo.
 
 - Docker, [Kind](https://kind.sigs.k8s.io/), `kubectl`, Helm 3, and **`git`** (for local-only mode)
 - **Remote GitOps:** pass **`--gitops-repo https://github.com/org/repo.git`** and **`--gitops-pat`** (or rely on `GITHUB_TOKEN` where your environment already provides it). The GitOps repo should be empty to start; the PAT needs access to push instance manifests.
-- **Local-only lab:** omit **`--gitops-repo`**. The installer creates a Kind cluster, installs **Gitea** (with ingress at `http://gitea.127.0.0.1.nip.io/` by default), materializes the GitOps tree, pushes it to Gitea once, and points Argo at an in-cluster **HTTP** clone URL. A random admin password is generated (same value Argo uses as the repository credential) unless you pass **`--gitops-pat`** yourself. The password is written to **`~/.spice-platform/gitea-local-credentials.txt`** (mode `600`).
+- **Local-only lab:** omit **`--gitops-repo`**. The installer creates a Kind cluster, installs **Gitea** (with ingress at `http://gitea.127.0.0.1.nip.io/` by default), materializes the GitOps tree, pushes it to Gitea once, and points Argo at an in-cluster **HTTP** clone URL. A random admin password is generated (same value Argo uses as the repository credential) unless you pass **`--gitops-pat`** yourself. The password is written to **`~/.spice-platform/gitea-local-credentials.txt`** (mode `600`). **Grafana** and **Superset** (optional Argo apps) get random secrets too; see **`~/.spice-platform/grafana-superset-credentials.txt`** plus `grafana-lab.password`, `superset-lab.password`, and `superset-lab.secret-key` in the same directory (also referenced from **`~/.spice-platform/install.env`**).
 
 ## One-liner
 
@@ -62,3 +62,8 @@ curl -fsSL https://<your-site>/install.sh | bash -s -- --gitops-repo https://git
 ```
 
 Deletes the Kind cluster named `spice-gitops` (override with `CLUSTER_NAME`).
+
+## Related
+
+- [User guide](./user-guide) — full walkthrough including local Gitea lab credentials
+- [Changelog](../reference/changelog) — release history

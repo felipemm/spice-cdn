@@ -7,7 +7,7 @@ This addon installs **[kube-prometheus-stack](https://github.com/prometheus-comm
 - **Namespace:** `monitoring`
 - **Helm release name:** `kps` (fixed — OpenCost values assume this name)
 - **Prometheus Service (in-cluster):** `kps-kube-prometheus-stack-prometheus` on port **9090**
-- **Grafana:** Ingress host **`grafana.127.0.0.1.nip.io`** (same ingress-nginx + Kind port **80** pattern as the tutorial). Default login **`admin` / `admin`** (lab only).
+- **Grafana:** Ingress host **`grafana.127.0.0.1.nip.io`** (same ingress-nginx + Kind port **80** pattern as the tutorial). **`scripts/install.sh`** materializes Argo with a random **`admin`** password and writes it under **`~/.spice-platform/`** (see `grafana-superset-credentials.txt`). Manual Helm using only `values-kind.yaml` still uses **`admin` / `admin`** (lab only).
 
 ## Install (before or alongside OpenCost)
 
@@ -46,6 +46,8 @@ Open Grafana in a browser: **`http://grafana.127.0.0.1.nip.io/`** (Host header t
 ## Optional Argo CD Application
 
 See [`application-kube-prometheus-stack.yaml`](./application-kube-prometheus-stack.yaml). Edit `grafana.ingress.hosts` in `spec.source.helm.values` (and mirror in `values-kind.yaml`) if the hostname collides.
+
+The Application sets **`ServerSideApply=true`** so large monitoring CRDs sync without hitting Kubernetes’s **262144-byte** cap on `metadata.annotations` (client-side `kubectl apply` stores the full object in `kubectl.kubernetes.io/last-applied-configuration`, which breaks kube-prometheus-stack CRDs and leaves **`Prometheus`** kinds missing — OpenCost then gets **connection refused** on the Prometheus Service). Requires **Argo CD ≥ 2.5**. If a previous sync left invalid or partial CRDs, delete the affected `CustomResourceDefinition` objects (or the whole `kube-prometheus-stack` Application and related resources in `monitoring`), commit the manifest with SSA, then sync again; after Prometheus is healthy, **`kubectl -n opencost rollout restart deploy/opencost`**.
 
 ## Notes
 

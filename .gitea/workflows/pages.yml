@@ -1,0 +1,71 @@
+# Build docs site (same steps as GitHub Pages workflow minus GitHub-only deploy).
+# Wire hosting yourself (e.g. rsync, object storage, or Gitea Pages if enabled on your instance).
+
+name: Pages (build)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "scripts/install.sh"
+      - ".gitea/workflows/pages.yml"
+  workflow_dispatch:
+    inputs:
+      spice_release:
+        description: "Tag to embed in public/install.sh (optional; empty = skip override)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install & build
+        working-directory: website
+        env:
+          PUBLIC_ASTRO_SITE: ${{ vars.PUBLIC_ASTRO_SITE }}
+          PUBLIC_ASTRO_BASE: ${{ vars.PUBLIC_ASTRO_BASE }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+          INPUT_SPICE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.spice_release || '' }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_SPICE_RELEASE:-}" ]; then
+            export PUBLIC_SPICE_PACKAGED_RELEASE="${INPUT_SPICE_RELEASE}"
+          else
+            export PUBLIC_SPICE_PACKAGED_RELEASE="$(
+              curl -fsSL \
+                -H "Authorization: token ${GITHUB_TOKEN}" \
+                -H "Accept: application/json" \
+                "${GITHUB_SERVER_URL%/}/api/v1/repos/${GITHUB_REPOSITORY}/releases/latest" \
+                | jq -r '.tag_name // empty'
+            )"
+          fi
+          export PUBLIC_ASTRO_SITE="${PUBLIC_ASTRO_SITE:-http://${REPO_OWNER}.localhost/}"
+          export PUBLIC_ASTRO_BASE="${PUBLIC_ASTRO_BASE:-/}"
+          npm ci
+          npm run build
+
+      - name: Upload site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-dist
+          path: website/dist

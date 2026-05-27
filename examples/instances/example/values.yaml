@@ -6,6 +6,8 @@ ingress:
   className: nginx
   host: spice-example.127.0.0.1.nip.io
 
+# ExternalSecret syncs Vault KV (mount secret, path vaultPath) into targetSecretName.
+# The path must contain at least one key or ESO can leave the ExternalSecret Degraded — see vault-seed.json and docs/tutorial.md.
 externalSecret:
   enabled: true
   clusterSecretStoreName: vault-backend

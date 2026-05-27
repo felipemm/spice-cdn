@@ -1,6 +1,7 @@
 import { Octokit } from "@octokit/rest";
 import YAML from "yaml";
-import { assertGitopsRepoConfigured } from "@/lib/config";
+import { assertGitopsRepoConfigured, getGitopsBackend } from "@/lib/config";
+import * as giteaGitops from "@/lib/gitea-gitops";
 
 const instancesPrefix = "instances";
 
@@ -29,11 +30,24 @@ export function spicePublicUrlFromValuesYaml(yamlText: string): string | null {
 }
 
 export function createOctokit() {
+  if (getGitopsBackend() === "gitea") {
+    throw new Error("createOctokit is only for GITOPS_BACKEND=github");
+  }
   const { token } = assertGitopsRepoConfigured();
   return new Octokit({ auth: token });
 }
 
+function github401Message(): string {
+  return (
+    "GitHub API rejected the token (GITOPS_TOKEN / GITHUB_TOKEN). Use a fine-grained or classic PAT with contents read/write " +
+    "on the GitOps repo. For the Kind + in-cluster Gitea lab, set GITOPS_BACKEND=gitea and GITOPS_GITEA_API_BASE_URL to the Gitea /api/v1 base URL."
+  );
+}
+
 export async function listInstanceNames(): Promise<string[]> {
+  if (getGitopsBackend() === "gitea") {
+    return giteaGitops.listInstanceNames();
+  }
   const octokit = createOctokit();
   const { owner, repo, branch } = assertGitopsRepoConfigured();
   try {
@@ -51,6 +65,9 @@ export async function listInstanceNames(): Promise<string[]> {
     const status = typeof e === "object" && e && "status" in e ? (e as { status?: number }).status : undefined;
     if (status === 404) {
       return [];
+    }
+    if (status === 401) {
+      throw new Error(github401Message());
     }
     throw e;
   }
@@ -75,18 +92,29 @@ export async function listInstancesWithUrls(): Promise<InstanceListEntry[]> {
 }
 
 export async function getValuesYaml(name: string): Promise<{ content: string; sha: string }> {
+  if (getGitopsBackend() === "gitea") {
+    return giteaGitops.getValuesYaml(name);
+  }
   const octokit = createOctokit();
   const { owner, repo, branch } = assertGitopsRepoConfigured();
-  const path = `${instancesPrefix}/${name}/values.yaml`;
-  const res = await octokit.repos.getContent({ owner, repo, path, ref: branch });
-  if (Array.isArray(res.data) || res.data.type !== "file") {
-    throw new Error(`values.yaml not found for instance ${name}`);
+  try {
+    const path = `${instancesPrefix}/${name}/values.yaml`;
+    const res = await octokit.repos.getContent({ owner, repo, path, ref: branch });
+    if (Array.isArray(res.data) || res.data.type !== "file") {
+      throw new Error(`values.yaml not found for instance ${name}`);
+    }
+    if (!("content" in res.data) || res.data.encoding !== "base64" || !res.data.sha) {
+      throw new Error("Unexpected GitHub API response for values.yaml");
+    }
+    const content = Buffer.from(res.data.content, "base64").toString("utf8");
+    return { content, sha: res.data.sha };
+  } catch (e: unknown) {
+    const status = typeof e === "object" && e && "status" in e ? (e as { status?: number }).status : undefined;
+    if (status === 401) {
+      throw new Error(github401Message());
+    }
+    throw e;
   }
-  if (!("content" in res.data) || res.data.encoding !== "base64" || !res.data.sha) {
-    throw new Error("Unexpected GitHub API response for values.yaml");
-  }
-  const content = Buffer.from(res.data.content, "base64").toString("utf8");
-  return { content, sha: res.data.sha };
 }
 
 export async function putValuesYaml(
@@ -94,7 +122,10 @@ export async function putValuesYaml(
   content: string,
   sha: string | null,
   message: string,
-) {
+): Promise<void> {
+  if (getGitopsBackend() === "gitea") {
+    return giteaGitops.putValuesYaml(name, content, sha, message);
+  }
   const octokit = createOctokit();
   const { owner, repo, branch } = assertGitopsRepoConfigured();
   const path = `${instancesPrefix}/${name}/values.yaml`;
@@ -122,6 +153,9 @@ export async function putValuesYaml(
 }
 
 export async function createInstance(name: string, initialYaml: string) {
+  if (getGitopsBackend() === "gitea") {
+    return giteaGitops.createInstance(name, initialYaml);
+  }
   const octokit = createOctokit();
   const { owner, repo, branch } = assertGitopsRepoConfigured();
   const path = `${instancesPrefix}/${name}/values.yaml`;
@@ -136,6 +170,9 @@ export async function createInstance(name: string, initialYaml: string) {
 }
 
 export async function deleteInstance(name: string) {
+  if (getGitopsBackend() === "gitea") {
+    return giteaGitops.deleteInstance(name);
+  }
   const octokit = createOctokit();
   const { owner, repo, branch } = assertGitopsRepoConfigured();
   const dirPath = `${instancesPrefix}/${name}`;

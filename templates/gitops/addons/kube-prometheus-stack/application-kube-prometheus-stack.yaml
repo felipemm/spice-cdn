@@ -5,6 +5,9 @@ kind: Application
 metadata:
   name: kube-prometheus-stack
   namespace: argocd
+  annotations:
+    # After control-plane (wave 1); before OpenCost which scrapes this Prometheus service.
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   project: default
   source:
@@ -64,3 +67,5 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      # CRDs from this chart exceed the 256KiB metadata.annotations limit under client-side apply.
+      - ServerSideApply=true

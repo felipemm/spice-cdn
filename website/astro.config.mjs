@@ -12,7 +12,7 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'Spice CDN Platform',
-			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/' }],
+			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/felipemm/spice-cdn' }],
 			sidebar: [
 				{
 					label: 'Guides',

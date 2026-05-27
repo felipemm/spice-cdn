@@ -64,13 +64,12 @@ jobs:
             ${{ steps.image.outputs.name }}:latest
             ${{ steps.image.outputs.name }}:${{ github.sha }}
 
-      - name: Bump Helm image in values.yaml
+      - name: Bump Helm image in values.yaml (web app only)
         run: |
           set -euo pipefail
-          img='${{ steps.image.outputs.name }}'
-          tag='${{ github.sha }}'
-          perl -i -pe "s|^  repository:.*|  repository: ${img}|" deploy/helm/control-plane/values.yaml
-          perl -i -pe "s|^  tag:.*|  tag: ${tag}|" deploy/helm/control-plane/values.yaml
+          docker run --rm -v "${PWD}:/work" -w /work mikefarah/yq:4.45.1 \
+            -i ".image.repository = \"${{ steps.image.outputs.name }}\" | .image.tag = \"${{ github.sha }}\"" \
+            deploy/helm/control-plane/values.yaml
 
       - name: Commit and push values bump
         env:

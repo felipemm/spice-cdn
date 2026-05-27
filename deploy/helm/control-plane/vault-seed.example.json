@@ -1,0 +1,5 @@
+{
+  "SUPERSET_URL": "http://superset.superset.svc.cluster.local:8088",
+  "SUPERSET_USERNAME": "admin",
+  "SUPERSET_PASSWORD": "replace-with-superset-admin-password"
+}

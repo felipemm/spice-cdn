@@ -8,4 +8,5 @@ dist/
 .DS_Store
 .secrets/
 spice-gitops-work/
+gitea/**
 website/dist/

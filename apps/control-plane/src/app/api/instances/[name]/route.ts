@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { deleteInstance, getValuesYaml, putValuesYaml } from "@/lib/github-service";
+import { isSupersetIntegrationReady, unregisterSpiceInstanceFromSuperset } from "@/lib/superset-service";
 
 type Ctx = { params: Promise<{ name: string }> };
 
@@ -35,7 +36,20 @@ export async function DELETE(_request: Request, ctx: Ctx) {
   const { name } = await ctx.params;
   try {
     await deleteInstance(name);
-    return NextResponse.json({ ok: true });
+
+    let superset: { unregistered: boolean; warning?: string } | undefined;
+    if (isSupersetIntegrationReady()) {
+      const un = await unregisterSpiceInstanceFromSuperset(name);
+      if (un.ok) {
+        superset = { unregistered: un.deleted };
+      } else if (un.skipped) {
+        superset = { unregistered: false, warning: un.reason };
+      } else {
+        superset = { unregistered: false, warning: un.error };
+      }
+    }
+
+    return NextResponse.json({ ok: true, superset });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -14,6 +14,9 @@ export function SiteNav() {
           <Link href="/instances/new" className="hover:text-white">
             New
           </Link>
+          <Link href="/cluster-urls" className="hover:text-white">
+            Cluster URLs
+          </Link>
           <Link href="/admin" className="hover:text-amber-200">
             Admin
           </Link>

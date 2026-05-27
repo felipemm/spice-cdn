@@ -1,10 +1,16 @@
 # Gitea in Kind (local lab). Admin password is overridden at install time via a second -f file.
 # UI: http://gitea.127.0.0.1.nip.io/ (requires ingress-nginx from helm_bootstrap).
+#
+# With postgresql / postgresql-ha disabled, the chart does not inject a DB — you must set
+# gitea.config.database (sqlite3 lab) or point at an external database. See:
+# https://gitea.com/gitea/helm-gitea/src/branch/main/README.md#minimal-configuration
 persistence:
   enabled: false
 postgresql:
   enabled: false
 postgresql-ha:
+  enabled: false
+valkey:
   enabled: false
 valkey-cluster:
   enabled: false
@@ -28,6 +34,15 @@ gitea:
     password: "will-be-overridden"
     email: spice-admin@local.invalid
   config:
+    # Gitea Actions (.gitea/workflows) + container registry for CI parity with GitHub.
+    actions:
+      ENABLED: true
+    packages:
+      ENABLED: true
+    database:
+      DB_TYPE: sqlite3
+    # Session/cache/queue use the standalone Valkey installed by scripts/install.sh (see values-valkey.yaml).
+    # The installer merges ~/.spice-platform/gitea-valkey-overrides.yaml at `helm upgrade` time.
     server:
       ROOT_URL: http://gitea.127.0.0.1.nip.io/
       DOMAIN: gitea.127.0.0.1.nip.io

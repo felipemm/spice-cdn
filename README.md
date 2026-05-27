@@ -2,7 +2,7 @@
 
 This repository is the **product**: Next.js control plane, Helm charts, installer, CI, and documentation site source. **Runtime GitOps** (what Argo CD reconciles) lives in a **separate repository** that you own.
 
-**New here?** Read the **[user guide](docs/USER_GUIDE.md)** (quick start, optional settings, and end-to-end steps). Deep-dive Kind bootstrap steps are in **[docs/tutorial.md](docs/tutorial.md)**.
+**New here?** Read the **[user guide](docs/USER_GUIDE.md)** (quick start, optional settings, and end-to-end steps). Deep-dive Kind bootstrap steps are in **[docs/tutorial.md](docs/tutorial.md)**. Release notes: **[CHANGELOG.md](CHANGELOG.md)**.
 
 ```mermaid
 flowchart LR
@@ -39,8 +39,12 @@ flowchart LR
 | [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) | **Full user guide:** quick start, optional install settings, step-by-step flow. |
 | [`docs/tutorial.md`](docs/tutorial.md) | Manual Kind walkthrough (paths use `templates/gitops/bootstrap/...`). |
 | [`docs/migration-two-repos.md`](docs/migration-two-repos.md) | Move from monorepo to product + GitOps. |
+| [`CHANGELOG.md`](CHANGELOG.md) | Notable changes per release ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)). |
+| [`gitops/README.md`](gitops/README.md) | Pointer: runtime GitOps lives in your repo, not here. |
 
 ## Install (pinned release)
+
+**Remote GitHub GitOps**
 
 1. Create an empty **GitOps** GitHub repo and a PAT with **`repo`** scope.
 2. From the **docs site** (GitHub Pages after you enable it), or from a release tarball:
@@ -50,6 +54,15 @@ curl -fsSL "https://<owner>.github.io/<repo>/install.sh" | bash
 ```
 
 The served `install.sh` is copied from this repo at build time; **releases** set `SPICE_PACKAGED_RELEASE` inside the packaged script. Override with `SPICE_RELEASE=vX.Y.Z`.
+
+**Local Kind lab (no GitHub GitOps repo)**
+
+```bash
+curl -fsSL "https://<owner>.github.io/<repo>/install.sh" | bash
+# or: ./scripts/install.sh   (from a clone)
+```
+
+Omit `--gitops-repo` to install **Gitea** in-cluster, materialize and push GitOps over HTTP, and use `GITOPS_BACKEND=gitea` on the control plane. Credentials: `~/.spice-platform/gitea-local-credentials.txt`. See [docs/USER_GUIDE.md](docs/USER_GUIDE.md#local-kind-lab-no-github-gitops-repo).
 
 **Local / dev** (uses the git checkout instead of downloading a release):
 

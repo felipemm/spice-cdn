@@ -8,17 +8,17 @@ metadata:
 spec:
   goTemplate: true
   generators:
+    # Only directories that contain values.yaml (avoids apps for vault-seed-only folders).
     - git:
         repoURL: __GITOPS_REPO_HTTPS_URL__
-__GITOPS_APPSET_GIT_INSECURE__
         revision: __GITOPS_TARGET_REVISION__
-        directories:
-          - path: instances/*
+        files:
+          - path: instances/*/values.yaml
   template:
     metadata:
-      name: "spice-{{.path.basename}}"
+      name: "spice-{{index .path.segments 1}}"
       labels:
-        spice.dataviz/instance: "{{.path.basename}}"
+        spice.dataviz/instance: "{{index .path.segments 1}}"
     spec:
       project: spice-platform
       destination:
@@ -26,13 +26,12 @@ __GITOPS_APPSET_GIT_INSECURE__
         namespace: spice-instances
       source:
         repoURL: __GITOPS_REPO_HTTPS_URL__
-__GITOPS_APPSET_SRC_INSECURE__
         targetRevision: __GITOPS_TARGET_REVISION__
         path: charts/spice-instance
         helm:
-          releaseName: "{{.path.basename}}"
+          releaseName: "{{index .path.segments 1}}"
           valueFiles:
-            - "../../instances/{{.path.basename}}/values.yaml"
+            - "../../instances/{{index .path.segments 1}}/values.yaml"
       syncPolicy:
         automated:
           prune: true

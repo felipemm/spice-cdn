@@ -1,0 +1,96 @@
+# Build apps/control-plane-mcp, push to this Gitea's container registry, bump Helm MCP sidecar values.
+
+name: Control plane MCP image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/control-plane-mcp/**"
+      - ".gitea/workflows/control-plane-mcp-image.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: control-plane-mcp-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CONTEXT: apps/control-plane-mcp
+  DOCKERFILE: apps/control-plane-mcp/Dockerfile
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Registry host
+        id: reg
+        run: |
+          u="${{ github.server_url }}"
+          h="${u#http://}"
+          h="${h#https://}"
+          h="${h%/}"
+          echo "host=${h}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set image name (lowercase path)
+        id: image
+        run: |
+          owner_repo_lower=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "name=${{ steps.reg.outputs.host }}/${owner_repo_lower}/control-plane-mcp" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up QEMU (cross-build arm64 on amd64 runners)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Gitea container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ steps.reg.outputs.host }}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.CONTEXT }}
+          file: ${{ env.DOCKERFILE }}
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ steps.image.outputs.name }}:latest
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+
+      - name: Bump Helm MCP image in values.yaml
+        run: |
+          set -euo pipefail
+          docker run --rm -v "${PWD}:/work" -w /work \
+            -e "MCP_IMAGE=${{ steps.image.outputs.name }}" \
+            -e "TAG=${{ github.sha }}" \
+            mikefarah/yq:4.45.1 \
+            -i '.mcp.image.repository = strenv(MCP_IMAGE) | .mcp.image.tag = strenv(TAG)' \
+            deploy/helm/control-plane/values.yaml
+
+      - name: Commit and push values bump
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name "gitea-actions[bot]"
+          git config user.email "gitea-actions@local"
+          git add deploy/helm/control-plane/values.yaml
+          if git diff --staged --quiet; then
+            echo "No Helm values change to commit."
+            exit 0
+          fi
+          git commit -m "chore(ci): bump control-plane-mcp image to ${{ github.sha }}"
+          git pull --rebase origin "${BRANCH}" || true
+          git push origin "HEAD:refs/heads/${BRANCH}"

@@ -1,0 +1,107 @@
+ownerLayerSlug: dataviz
+
+ingress:
+  enabled: true
+  className: nginx
+  host: spice-databricks.127.0.0.1.nip.io
+
+externalSecret:
+  enabled: true
+  clusterSecretStoreName: vault-backend
+  vaultPath: spice/instances/databricks
+  targetSecretName: spice-databricks-env
+  refreshInterval: 1m
+
+spiceai:
+  additionalLabels:
+    owner-layer-slug: dataviz
+  spicepod:
+    version: v1
+    kind: Spicepod
+    name: databricksa
+    models:
+      - from: openai:ifood_default
+        name: ifood
+        params:
+          openai_api_key: ${ secrets:OPENAI_API_KEY }
+          endpoint: ${ env:OPENAI_ENDPOINT }
+          tools: auto
+    runtime:
+      caching:
+        sql_results:
+          enabled: true
+          max_size: 1GiB # Default 128 MiB
+          item_ttl: 1h # Default 1s
+          stale_while_revalidate_ttl: 1h # Default 0s (disabled)
+        search_results:
+          enabled: true
+          max_size: 1GiB # Default 128 MiB
+          item_ttl: 1m # Default 1s
+    databricks_settings: &databricks_settings
+      mode: sql_warehouse
+      databricks_endpoint: ${ env:DATABRICKS_HOST }
+      databricks_client_id: ${secrets:DATABRICKS_CLIENT_ID} # service principal client id
+      databricks_client_secret: ${secrets:DATABRICKS_CLIENT_SECRET} # service principal client secret
+      databricks_sql_warehouse_id: ${ env:DATABRICKS_SQL_WAREHOUSE_ID }
+    acceleration_settings: &acceleration_settings
+      enabled: true
+      on_zero_results: use_source
+      refresh_on_startup: always
+      refresh_mode: full
+      refresh_cron: '0 9 * * 1-5'
+    datasets:
+      - from: databricks:platform.dataviz.judge_dredd_canceled_queries
+        name: judge_dredd_canceled_queries
+        params: *databricks_settings
+        acceleration: *acceleration_settings
+      - from: databricks:main.thoughtspot_server.connections
+        name: connections
+        params: *databricks_settings
+        acceleration:
+          enabled: true
+          on_zero_results: use_source
+          refresh_on_startup: always
+          refresh_mode: full
+          refresh_cron: '0 9 * * 1-5'
+          refresh_sql: |
+            SELECT * FROM connections
+            WHERE dt = (select max(dt) from connections)
+  additionalEnv:
+    - name: OPENAI_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: spice-databricks-env
+          key: OPENAI_API_KEY
+    - name: OPENAI_ENDPOINT
+      valueFrom:
+        secretKeyRef:
+          name: spice-databricks-env
+          key: OPENAI_ENDPOINT
+    - name: DATABRICKS_HOST
+      valueFrom:
+        secretKeyRef:
+          name: spice-databricks-env
+          key: DATABRICKS_HOST
+    - name: DATABRICKS_CLIENT_ID
+      valueFrom:
+        secretKeyRef:
+          name: spice-databricks-env
+          key: DATABRICKS_CLIENT_ID
+    - name: DATABRICKS_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: spice-databricks-env
+          key: DATABRICKS_CLIENT_SECRET
+    - name: DATABRICKS_SQL_WAREHOUSE_ID
+      valueFrom:
+        secretKeyRef:
+          name: spice-databricks-env
+          key: DATABRICKS_SQL_WAREHOUSE_ID
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi

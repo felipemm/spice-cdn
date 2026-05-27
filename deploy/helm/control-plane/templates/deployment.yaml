@@ -30,6 +30,10 @@ spec:
           env:
             - name: NODE_ENV
               value: production
+            - name: GITOPS_BACKEND
+              value: {{ .Values.env.gitopsBackend | quote }}
+            - name: GITOPS_GITEA_API_BASE_URL
+              value: {{ .Values.env.gitopsGiteaApiBaseUrl | quote }}
             - name: GITOPS_REPO_OWNER
               value: {{ .Values.env.gitopsRepoOwner | quote }}
             - name: GITOPS_REPO_NAME
@@ -51,6 +55,10 @@ spec:
               value: {{ .Values.env.argocdNamespace | quote }}
             - name: SPICE_NAMESPACE
               value: {{ .Values.env.spiceNamespace | quote }}
+            - name: KIND_LAB_INGRESS_ROOT
+              value: {{ .Values.env.kindLabIngressRoot | default "127.0.0.1.nip.io" | quote }}
+            - name: KIND_LAB_INGRESS_SCHEME
+              value: {{ .Values.env.kindLabIngressScheme | default "http" | quote }}
             - name: GITOPS_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -71,6 +79,35 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.secrets.adminApiKeySecretName }}
                   key: {{ .Values.secrets.adminApiKeySecretKey }}
+            {{- if and .Values.externalSecret.enabled .Values.externalSecret.syncSuperset }}
+            - name: SUPERSET_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecret.targetSecretName }}
+                  key: SUPERSET_URL
+            - name: SUPERSET_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecret.targetSecretName }}
+                  key: SUPERSET_USERNAME
+            - name: SUPERSET_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecret.targetSecretName }}
+                  key: SUPERSET_PASSWORD
+            {{- else if .Values.env.supersetUrl }}
+            - name: SUPERSET_URL
+              value: {{ .Values.env.supersetUrl | quote }}
+            - name: SUPERSET_USERNAME
+              value: {{ .Values.env.supersetUsername | quote }}
+            {{- if .Values.secrets.supersetPasswordSecretName }}
+            - name: SUPERSET_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.supersetPasswordSecretName }}
+                  key: {{ .Values.secrets.supersetPasswordSecretKey }}
+            {{- end }}
+            {{- end }}
             - name: BUDGETS_FILE
               value: "/config/budgets.yaml"
             {{- with .Values.cost.opencostBaseUrl }}
