@@ -21,6 +21,33 @@ For architecture diagrams and the split between product and GitOps, see [README.
 
 **Local lab only:** Docker, Kind, `kubectl`, Helm, and `curl` are enough — no GitHub GitOps repo required (see [Local Kind lab](#local-kind-lab-no-github-gitops-repo) below).
 
+The installer **checks host tools** before bootstrap. If something is missing (for example Docker or `kubectl`), it asks whether it may install it for you. Piped installs (`curl … | bash`) and **`YES=1`** / **`--yes`** allow automatic installs without prompts.
+
+### Optional components (feature menu)
+
+During install, an interactive menu lets you toggle optional platform pieces (default: **all enabled**):
+
+| Feature ID | Component |
+|------------|-----------|
+| `prometheus` | kube-prometheus-stack (Prometheus + Grafana) |
+| `opencost` | OpenCost (requires Prometheus) |
+| `superset` | Apache Superset |
+| `gitea_actions` | Gitea Actions runner (local lab only) |
+
+**Non-interactive examples:**
+
+```bash
+# Disable OpenCost and Superset; keep Prometheus/Grafana
+./scripts/install.sh --without-features opencost,superset
+
+# Allow-list only monitoring + Superset
+./scripts/install.sh --features prometheus,superset
+
+# Same via env (saved to ~/.spice-platform/install.env after install)
+export SPICE_FEATURES=prometheus,superset
+./scripts/install.sh --yes
+```
+
 ---
 
 ## Quick start — run the platform in a few steps

@@ -251,7 +251,8 @@ code {
 
 /* Install block */
 .install-block {
-  max-width: 36rem;
+  width: fit-content;
+  max-width: 100%;
   margin: 0 auto;
   text-align: left;
 }
@@ -268,10 +269,13 @@ code {
   display: flex;
   gap: 0.5rem;
   align-items: stretch;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .install-row pre {
-  flex: 1;
+  flex: 0 1 auto;
+  min-width: 0;
   margin: 0;
   padding: 0.9rem 1rem;
   font-family: var(--mono);
@@ -280,7 +284,9 @@ code {
   background: rgba(0, 0, 0, 0.5);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  overflow-x: auto;
+  overflow: visible;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   color: #c8e6ff;
 }
 

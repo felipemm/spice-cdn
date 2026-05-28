@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-05-28
+
+### Added
+
+- **Installer optional features:** interactive menu (bash / gum / dialog) and CLI flags `--features` / `--without-features` for Prometheus + Grafana, OpenCost, Superset, and Gitea Actions; selection persisted as `SPICE_FEATURES` in `install.env`.
+- **Host dependency bootstrap:** installer reports missing host tools and offers to install curl, tar, openssl, git, Docker, kubectl, Helm, and Kind (`--yes` and piped installs proceed without prompts).
+- **OpenCost (Kind):** custom AWS pricing model (m5.xlarge, us-east-1) via `opencost.customPricing` in addon values and the Argo Application.
+
+### Changed
+
+- **Materialization:** copy only enabled addon Argo Applications; lab credential patches and Vault Superset seed respect feature selection (`gitops-lab-patches.sh`, `install.sh`).
+- **Upgrade:** restore `SPICE_FEATURES` from `install.env` when re-materializing.
+- **Docs:** user guide and install guide cover the feature menu and dependency checks; Superset README documents StatefulSet delete + hard refresh when adding the Postgres PVC.
+
+### Fixed
+
+- **Docs site:** home page install command block no longer clips long `curl` lines (CSS `fit-content` / `pre-wrap`).
+
 ## [0.2.1] - 2026-05-27
 
 ### Changed
@@ -80,7 +98,8 @@ First public platform release: product repository + operator-owned GitOps reposi
 
 - **Repository layout:** runtime GitOps is no longer the source of truth in this repo; `gitops/` at repo root is a pointer — templates live in `templates/gitops/`.
 
-[unreleased]: https://github.com/felipemm/spice-cdn/compare/v0.2.1...HEAD
+[unreleased]: https://github.com/felipemm/spice-cdn/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/felipemm/spice-cdn/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/felipemm/spice-cdn/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/felipemm/spice-cdn/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/felipemm/spice-cdn/compare/v0.1.0...v0.1.1

@@ -6,6 +6,16 @@
 
 The admin **Costs** panel calls OpenCost allocation endpoints (best-effort; API shape varies by version).
 
+## Custom pricing (m5.xlarge us-east-1)
+
+[`values-kind.yaml`](./values-kind.yaml) enables **`opencost.customPricing`** and creates ConfigMap **`pricing-config`** in namespace **`opencost`** with on-demand **m5.xlarge**–style rates (CPU/RAM/spot/storage/egress, **`defaultRegion: us-east-1`**). OpenCost mounts it at **`/tmp/custom-config`** (`PRICING_CONFIGMAP_NAME=pricing-config`).
+
+After changing pricing, restart the deployment:
+
+```bash
+kubectl -n opencost rollout restart deploy/opencost
+```
+
 ## Prometheus is required (default in-cluster URL)
 
 With **`opencost.prometheus.internal.enabled: true`** (see [`values-kind.yaml`](./values-kind.yaml)), OpenCost queries **kube-prometheus-stack** Prometheus:

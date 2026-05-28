@@ -17,6 +17,21 @@ spec:
       # Keep in sync with values-kind.yaml (chart 1.33.1: prometheus internal URL + ui ingress under `opencost:`).
       values: |
         opencost:
+          customPricing:
+            enabled: true
+            configmapName: pricing-config
+            provider: AWS
+            costModel:
+              description: "m5.xlarge - 4 vCPU / 16 GiB - us-east-1 on-demand"
+              CPU: "0.0480"
+              spotCPU: "0.0144"
+              RAM: "0.00600"
+              spotRAM: "0.00180"
+              storage: "0.04"
+              zoneNetworkEgress: "0.01"
+              regionNetworkEgress: "0.01"
+              internetNetworkEgress: "0.12"
+              defaultRegion: us-east-1
           prometheus:
             internal:
               enabled: true
