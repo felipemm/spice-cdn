@@ -107,8 +107,28 @@ EOF
   kubectl -n "${SPICE_VALKEY_NAMESPACE}" rollout status "statefulset/${SPICE_VALKEY_PRIMARY_SVC}" --timeout=300s
 }
 
-# shellcheck source=gitops-lab-patches.sh
-. "${SCRIPT_DIR}/gitops-lab-patches.sh"
+# curl | bash has no BASH_SOURCE path; lab patches ship next to install.sh in the release tarball.
+spice_source_gitops_lab_patches() {
+  local bundle_root="${1:-}"
+  if [[ -n "${_GITOPS_LAB_PATCHES_LOADED:-}" ]]; then
+    return 0
+  fi
+  local f="" candidate
+  for candidate in \
+    "${SCRIPT_DIR}/gitops-lab-patches.sh" \
+    "${REPO_ROOT}/scripts/gitops-lab-patches.sh" \
+    "${bundle_root}/gitops-lab-patches.sh" \
+    "${bundle_root}/scripts/gitops-lab-patches.sh"; do
+    if [[ -n "${candidate}" && -f "${candidate}" ]]; then
+      f="${candidate}"
+      break
+    fi
+  done
+  [[ -n "${f}" ]] || die "missing gitops-lab-patches.sh (use a published release or clone the product repo)"
+  # shellcheck source=gitops-lab-patches.sh
+  . "${f}"
+  _GITOPS_LAB_PATCHES_LOADED=1
+}
 
 gitea_internal_http_clone_url() {
   printf 'http://%s-http.%s.svc.cluster.local:3000/%s/%s.git' \
@@ -970,6 +990,7 @@ resolve_bundle_root() {
 
 materialize_tree() {
   local bundle_root="$1"
+  spice_source_gitops_lab_patches "${bundle_root}"
   local out="$2"
   local gitops_url="$3"
   local revision="$4"

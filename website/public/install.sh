@@ -107,8 +107,28 @@ EOF
   kubectl -n "${SPICE_VALKEY_NAMESPACE}" rollout status "statefulset/${SPICE_VALKEY_PRIMARY_SVC}" --timeout=300s
 }
 
-# shellcheck source=gitops-lab-patches.sh
-. "${SCRIPT_DIR}/gitops-lab-patches.sh"
+# curl | bash has no BASH_SOURCE path; lab patches ship next to install.sh in the release tarball.
+spice_source_gitops_lab_patches() {
+  local bundle_root="${1:-}"
+  if [[ -n "${_GITOPS_LAB_PATCHES_LOADED:-}" ]]; then
+    return 0
+  fi
+  local f="" candidate
+  for candidate in \
+    "${SCRIPT_DIR}/gitops-lab-patches.sh" \
+    "${REPO_ROOT}/scripts/gitops-lab-patches.sh" \
+    "${bundle_root}/gitops-lab-patches.sh" \
+    "${bundle_root}/scripts/gitops-lab-patches.sh"; do
+    if [[ -n "${candidate}" && -f "${candidate}" ]]; then
+      f="${candidate}"
+      break
+    fi
+  done
+  [[ -n "${f}" ]] || die "missing gitops-lab-patches.sh (use a published release or clone the product repo)"
+  # shellcheck source=gitops-lab-patches.sh
+  . "${f}"
+  _GITOPS_LAB_PATCHES_LOADED=1
+}
 
 gitea_internal_http_clone_url() {
   printf 'http://%s-http.%s.svc.cluster.local:3000/%s/%s.git' \
@@ -177,10 +197,10 @@ install_gitea_actions_runner() {
   local bundle_root="$1"
   local admin_pass="$2"
   local api_port="$3"
-  [[ "${SPICE_SKIP_GITEA_ACTIONS_RUNNER:-0}" != "1" ]] || {
-    echo "Skipping Gitea Actions runner (SPICE_SKIP_GITEA_ACTIONS_RUNNER=1)." >&2
+  if [[ "${SPICE_SKIP_GITEA_ACTIONS_RUNNER:-0}" == "1" ]] || ! spice_feature_enabled gitea_actions; then
+    echo "Skipping Gitea Actions runner (disabled in feature selection or SPICE_SKIP_GITEA_ACTIONS_RUNNER=1)." >&2
     return 0
-  }
+  fi
   local vf=""
   if [[ -f "${bundle_root}/templates/gitops/bootstrap/values-gitea-actions.yaml" ]]; then
     vf="${bundle_root}/templates/gitops/bootstrap/values-gitea-actions.yaml"
@@ -246,7 +266,6 @@ gitea_create_empty_repo() {
 build_kind_lab_control_plane_images() {
   local bundle_root="$1"
   local cluster_name="$2"
-  command -v docker >/dev/null 2>&1 || die "docker is required to build control-plane images for the local Gitea lab"
   echo "Building control-plane + MCP images and loading into Kind (avoids ghcr.io)…" >&2
   docker build -t spice-cp-local:lab -f "${bundle_root}/apps/control-plane/Dockerfile" "${bundle_root}/apps/control-plane"
   docker build -t spice-cp-mcp-local:lab -f "${bundle_root}/apps/control-plane-mcp/Dockerfile" "${bundle_root}/apps/control-plane-mcp"
@@ -258,7 +277,6 @@ gitea_push_materialized_workdir() {
   local work="$1"
   local admin_pass="$2"
   local port="$3"
-  command -v git >/dev/null 2>&1 || die "git is required for local Gitea bootstrap"
   rm -rf "${work}/.git"
   git -C "${work}" init -b main
   git -C "${work}" config user.email "spice-local@invalid"
@@ -291,7 +309,9 @@ Options:
   --materialize DIR     Only render templates into DIR and exit (no cluster)
   --upgrade             Re-materialize from latest product release (remote GitOps only; see state file)
   --uninstall --all     Delete the Kind cluster (CLUSTER_NAME)
-  --yes                 Answer yes to confirmation prompts (recommended for uninstall when piping)
+  --yes                 Answer yes to confirmation prompts; install missing host tools; enable all optional features
+  --features LIST       Comma-separated optional features to enable (disables others): prometheus, opencost, superset, gitea_actions
+  --without-features LIST  Comma-separated features to disable (default is all on): prometheus, opencost, superset, gitea_actions
 
 Defaults:
   Unset GITOPS_REPO_URL → local Kind lab: Gitea in-cluster (HTTP for Argo), ingress UI at
@@ -307,6 +327,7 @@ Optional overrides (environment):
   SPICE_GITEA_ACTIONS_NAMESPACE, SPICE_GITEA_ACTIONS_RELEASE, SPICE_SKIP_GITEA_ACTIONS_RUNNER (set to 1 to skip act_runner), ACTIONS_CHART_VERSION (default 0.1.1)
   SPICE_VALKEY_NAMESPACE, SPICE_VALKEY_RELEASE, SPICE_VALKEY_PRIMARY_SVC, VALKEY_CHART_VERSION (default 6.0.2)
   SPICE_DISABLE_LOCAL_GITOPS=1  Require --gitops-repo (fail if URL empty)
+  SPICE_FEATURES=prometheus,superset  Optional components (saved to install.env after install)
 
 Examples:
   install.sh
@@ -361,15 +382,182 @@ spice_try_pkg_install() {
   return 1
 }
 
+spice_dep_present() {
+  local dep="$1"
+  case "${dep}" in
+    docker)
+      command -v docker >/dev/null 2>&1 || return 1
+      docker info >/dev/null 2>&1
+      ;;
+    *)
+      command -v "${dep}" >/dev/null 2>&1
+      ;;
+  esac
+}
+
+spice_dep_install_hint() {
+  local dep="$1"
+  case "${dep}" in
+    curl) printf '%s' "package manager (e.g. brew install curl, apt install curl)" ;;
+    tar) printf '%s' "package manager (e.g. brew install gnu-tar, apt install tar)" ;;
+    openssl) printf '%s' "package manager (e.g. brew install openssl, apt install openssl)" ;;
+    git) printf '%s' "package manager (e.g. brew install git, apt install git)" ;;
+    docker)
+      if [[ "$(uname -s)" == Darwin* ]] && command -v brew >/dev/null 2>&1; then
+        printf '%s' "Homebrew: brew install --cask docker (then start Docker Desktop)"
+      else
+        printf '%s' "package manager (e.g. apt install docker.io) or https://docs.docker.com/get-docker/"
+      fi
+      ;;
+    kubectl|helm|kind)
+      printf '%s' "download to ${STATE_DIR}/bin (installer)" ;;
+    *) printf '%s' "your OS package manager or vendor docs" ;;
+  esac
+}
+
+spice_deps_refuse_install() {
+  [[ "${YES:-0}" == "1" ]] && return 1
+  [[ "${NONINTERACTIVE:-0}" == "1" ]] || [[ "${CI:-}" == "1" ]] || [[ "${CI:-}" == "true" ]]
+}
+
+spice_confirm_install_dep() {
+  local dep="$1" hint
+  hint="$(spice_dep_install_hint "${dep}")"
+  if [[ "${YES:-0}" == "1" ]]; then
+    return 0
+  fi
+  if spice_deps_refuse_install; then
+    return 1
+  fi
+  confirm "Install ${dep}? (${hint})"
+}
+
+spice_ensure_docker_daemon() {
+  spice_dep_present docker && return 0
+  if command -v docker >/dev/null 2>&1; then
+    echo "error: docker is installed but the daemon is not running." >&2
+    if [[ "$(uname -s)" == Darwin* ]]; then
+      echo "  Start Docker Desktop, then re-run install.sh." >&2
+    else
+      echo "  Start the Docker service (e.g. sudo systemctl start docker), then re-run install.sh." >&2
+    fi
+    exit 1
+  fi
+  return 1
+}
+
+spice_install_docker() {
+  if [[ "$(uname -s)" == Darwin* ]] && command -v brew >/dev/null 2>&1; then
+    HOMEBREW_NO_AUTO_UPDATE=1 brew install --cask docker >/dev/null 2>&1 \
+      || HOMEBREW_NO_AUTO_UPDATE=1 brew install --cask docker
+    return 0
+  fi
+  spice_try_pkg_install docker.io \
+    || spice_try_pkg_install docker \
+    || spice_try_pkg_install moby-engine \
+    || return 1
+}
+
+spice_install_dep() {
+  local dep="$1"
+  case "${dep}" in
+    curl)
+      spice_try_pkg_install ca-certificates curl || spice_try_pkg_install curl || return 1
+      ;;
+    tar)
+      spice_try_pkg_install tar || return 1
+      ;;
+    openssl)
+      spice_try_pkg_install openssl || return 1
+      ;;
+    git)
+      spice_try_pkg_install git || return 1
+      ;;
+    docker)
+      spice_install_docker || return 1
+      spice_ensure_docker_daemon || true
+      ;;
+    kubectl)
+      spice_install_kubectl_bindir || return 1
+      ;;
+    helm)
+      spice_install_helm_bindir || return 1
+      ;;
+    kind)
+      spice_install_kind_bindir || return 1
+      ;;
+    *) die "internal: unknown dependency ${dep}" ;;
+  esac
+}
+
+spice_ensure_dep() {
+  local dep="$1"
+  if spice_dep_present "${dep}"; then
+    return 0
+  fi
+  if ! spice_confirm_install_dep "${dep}"; then
+    echo "error: ${dep} is required. Install manually: $(spice_dep_install_hint "${dep}")" >&2
+    return 1
+  fi
+  echo "Installing ${dep}…" >&2
+  spice_install_dep "${dep}" || {
+    echo "error: could not install ${dep}. Install manually: $(spice_dep_install_hint "${dep}")" >&2
+    return 1
+  }
+  if [[ "${dep}" == docker ]]; then
+    spice_ensure_docker_daemon || return 1
+  fi
+  spice_dep_present "${dep}" || {
+    echo "error: ${dep} still not available after install attempt." >&2
+    return 1
+  }
+}
+
+spice_report_deps() {
+  local dep status hint
+  echo "Checking host dependencies…" >&2
+  for dep in "$@"; do
+    if spice_dep_present "${dep}"; then
+      status="ok"
+    else
+      status="missing"
+    fi
+    hint="$(spice_dep_install_hint "${dep}")"
+    printf '  %-10s %s' "${dep}" "${status}" >&2
+    [[ "${status}" == missing ]] && printf ' — %s' "${hint}" >&2
+    echo "" >&2
+  done
+}
+
+spice_ensure_deps_list() {
+  local dep
+  spice_report_deps "$@"
+  for dep in "$@"; do
+    spice_ensure_dep "${dep}" || return 1
+  done
+}
+
 spice_ensure_curl() {
-  command -v curl >/dev/null 2>&1 && return 0
-  spice_try_pkg_install ca-certificates curl || spice_try_pkg_install curl || true
-  command -v curl >/dev/null 2>&1 || die "could not install curl (install manually or use a package manager)"
+  spice_prepend_installer_bin_path
+  if spice_dep_present curl; then
+    return 0
+  fi
+  if [[ "${YES:-0}" == "1" ]]; then
+    spice_install_dep curl || die "could not install curl"
+    return 0
+  fi
+  if spice_deps_refuse_install; then
+    die "curl is required. Install curl, or re-run with YES=1 to allow automatic install."
+  fi
+  if confirm "Install curl? ($(spice_dep_install_hint curl))"; then
+    spice_install_dep curl || die "could not install curl"
+    return 0
+  fi
+  die "curl is required to continue."
 }
 
 spice_ensure_tar() {
-  command -v tar >/dev/null 2>&1 && return 0
-  spice_try_pkg_install tar || die "could not install tar"
+  spice_ensure_dep tar
 }
 
 spice_host_k8s_os_arch() {
@@ -434,38 +622,27 @@ spice_install_helm_bindir() {
 ensure_spice_host_dependencies() {
   local profile="$1"
   local need_git="${2:-0}"
+  local -a deps=()
+
   spice_prepend_installer_bin_path
   spice_ensure_curl
 
   case "${profile}" in
     uninstall)
-      command -v kind >/dev/null 2>&1 || spice_install_kind_bindir
-      command -v kind >/dev/null 2>&1 || die "could not install kind"
+      deps=(kind)
       ;;
-    upgrade)
-      spice_ensure_tar
-      ;;
-    materialize)
-      spice_ensure_tar
+    upgrade|materialize)
+      deps=(tar)
       ;;
     full)
-      spice_ensure_tar
-      command -v openssl >/dev/null 2>&1 || spice_try_pkg_install openssl || true
-      command -v openssl >/dev/null 2>&1 || die "openssl is required (install openssl or use a full OS image)"
-      command -v kubectl >/dev/null 2>&1 || spice_install_kubectl_bindir
-      command -v kubectl >/dev/null 2>&1 || die "could not install kubectl"
-      command -v helm >/dev/null 2>&1 || spice_install_helm_bindir
-      command -v helm >/dev/null 2>&1 || die "could not install helm"
-      command -v kind >/dev/null 2>&1 || spice_install_kind_bindir
-      command -v kind >/dev/null 2>&1 || die "could not install kind"
-      if [[ "${need_git}" == "1" ]]; then
-        command -v git >/dev/null 2>&1 || spice_try_pkg_install git || die "could not install git"
-      fi
+      deps=(tar openssl kubectl helm kind docker)
+      [[ "${need_git}" == "1" ]] && deps+=(git)
       ;;
     *)
       die "internal: unknown dependency profile: ${profile}"
       ;;
   esac
+  spice_ensure_deps_list "${deps[@]}"
 }
 
 spice_resolve_default_release_tag_if_piped() {
@@ -487,6 +664,282 @@ confirm() {
   local ans
   read -r -p "$* [y/N] " ans || true
   [[ "${ans}" == "y" || "${ans}" == "Y" ]]
+}
+
+# --- Optional platform features (Argo addons + local Gitea Actions) ---
+# id|label|default|local_only|requires_csv
+SPICE_FEATURE_DEFS=(
+  "prometheus|Prometheus + Grafana (monitoring)|1|0|"
+  "opencost|OpenCost (cost allocation UI)|1|0|prometheus"
+  "superset|Apache Superset (BI / SQL Lab)|1|0|"
+  "gitea_actions|Gitea Actions runner (CI jobs)|1|1|"
+)
+
+SPICE_FEATURES_ENABLED=""
+SPICE_FEATURES_CLI_CONFIGURED=0
+
+spice_feature_enabled() {
+  local id="$1"
+  case " ${SPICE_FEATURES_ENABLED} " in
+    *" ${id} "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+spice_feature_enable() {
+  local id="$1"
+  spice_feature_enabled "${id}" && return 0
+  SPICE_FEATURES_ENABLED="${SPICE_FEATURES_ENABLED:+$SPICE_FEATURES_ENABLED }${id}"
+}
+
+spice_feature_disable() {
+  local id="$1" out="" f
+  for f in ${SPICE_FEATURES_ENABLED}; do
+    [[ "${f}" == "${id}" ]] && continue
+    out="${out:+$out }${f}"
+  done
+  SPICE_FEATURES_ENABLED="${out}"
+}
+
+spice_feature_label() {
+  local id="$1" def id2 _lbl _def _loc _req
+  for def in "${SPICE_FEATURE_DEFS[@]}"; do
+    IFS='|' read -r id2 _lbl _def _loc _req <<<"${def}"
+    [[ "${id2}" == "${id}" ]] && printf '%s' "${_lbl}" && return 0
+  done
+  printf '%s' "${id}"
+}
+
+spice_feature_init_defaults() {
+  local local_lab="${1:-0}" def id _lbl _def _loc _req
+  SPICE_FEATURES_ENABLED=""
+  for def in "${SPICE_FEATURE_DEFS[@]}"; do
+    IFS='|' read -r id _lbl _def _loc _req <<<"${def}"
+    [[ "${_def}" == "1" ]] || continue
+    [[ "${_loc}" == "1" && "${local_lab}" != "1" ]] && continue
+    spice_feature_enable "${id}"
+  done
+}
+
+spice_features_from_csv() {
+  local csv="$1" id
+  csv="${csv//,/ }"
+  for id in ${csv}; do
+    id="$(normalize_shell_token "${id}")"
+    [[ -n "${id}" ]] && spice_feature_enable "${id}"
+  done
+}
+
+spice_features_to_env() {
+  printf '%s' "${SPICE_FEATURES_ENABLED# }"
+}
+
+spice_features_from_env() {
+  local csv="$1"
+  SPICE_FEATURES_ENABLED=""
+  spice_features_from_csv "${csv}"
+}
+
+spice_apply_feature_dependencies() {
+  if ! spice_feature_enabled prometheus && spice_feature_enabled opencost; then
+    echo "Note: OpenCost requires Prometheus; disabling OpenCost." >&2
+    spice_feature_disable opencost
+  fi
+}
+
+spice_apply_cli_feature_flags() {
+  local allow="${FEATURES_ALLOW:-}" deny="${FEATURES_DENY:-}" envf="${SPICE_FEATURES:-}"
+  [[ -n "${allow}${deny}${envf}" ]] || return 0
+  SPICE_FEATURES_CLI_CONFIGURED=1
+  local local_lab="${SPICE_FEATURE_LOCAL_LAB:-0}"
+  spice_feature_init_defaults "${local_lab}"
+  if [[ -n "${deny}" ]]; then
+    local id
+    deny="${deny//,/ }"
+    for id in ${deny}; do
+      spice_feature_disable "$(normalize_shell_token "${id}")"
+    done
+  fi
+  if [[ -n "${allow}" ]]; then
+    SPICE_FEATURES_ENABLED=""
+    spice_features_from_csv "${allow}"
+  elif [[ -n "${envf}" ]]; then
+    SPICE_FEATURES_ENABLED=""
+    spice_features_from_csv "${envf}"
+  fi
+  spice_apply_feature_dependencies
+}
+
+spice_features_show_summary() {
+  local def id _lbl _def _loc _req
+  echo "Selected optional features:" >&2
+  for def in "${SPICE_FEATURE_DEFS[@]}"; do
+    IFS='|' read -r id _lbl _def _loc _req <<<"${def}"
+    if spice_feature_enabled "${id}"; then
+      printf '  [x] %s\n' "${_lbl}" >&2
+    else
+      printf '  [ ] %s\n' "${_lbl}" >&2
+    fi
+  done
+}
+
+spice_select_features_bash_menu() {
+  local local_lab="${1:-0}" def id _lbl _def _loc _req
+  local -a ids=() labels=() selected=()
+  local i n ch
+
+  for def in "${SPICE_FEATURE_DEFS[@]}"; do
+    IFS='|' read -r id _lbl _def _loc _req <<<"${def}"
+    [[ "${_loc}" == "1" && "${local_lab}" != "1" ]] && continue
+    ids+=("${id}")
+    labels+=("${_lbl}")
+    if spice_feature_enabled "${id}"; then
+      selected+=("1")
+    else
+      selected+=("0")
+    fi
+  done
+
+  echo "" >&2
+  echo "Select optional features (number=toggle, Enter=confirm). [*] = enabled" >&2
+  while true; do
+    for i in "${!ids[@]}"; do
+      if [[ "${selected[$i]}" == "1" ]]; then
+        printf '  [*] %s  %s\n' "$((i + 1))" "${labels[$i]}" >&2
+      else
+        printf '  [ ] %s  %s\n' "$((i + 1))" "${labels[$i]}" >&2
+      fi
+    done
+    read -r -p "Choice (1-${#ids[@]} toggle, or Enter to continue): " ch || ch=""
+    [[ -z "${ch}" ]] && break
+    if [[ "${ch}" =~ ^[0-9]+$ ]] && [[ "${ch}" -ge 1 ]] && [[ "${ch}" -le ${#ids[@]} ]]; then
+      i=$((ch - 1))
+      if [[ "${selected[$i]}" == "1" ]]; then
+        selected[$i]="0"
+        spice_feature_disable "${ids[$i]}"
+      else
+        selected[$i]="1"
+        spice_feature_enable "${ids[$i]}"
+      fi
+    else
+      echo "Invalid choice." >&2
+    fi
+  done
+}
+
+spice_select_features_gum() {
+  local local_lab="${1:-0}" def id _lbl _def _loc _req
+  local -a choices=() picked=()
+  local out line
+
+  for def in "${SPICE_FEATURE_DEFS[@]}"; do
+    IFS='|' read -r id _lbl _def _loc _req <<<"${def}"
+    [[ "${_loc}" == "1" && "${local_lab}" != "1" ]] && continue
+    if spice_feature_enabled "${id}"; then
+      choices+=("${_lbl},selected")
+    else
+      choices+=("${_lbl}")
+    fi
+  done
+
+  mapfile -t picked < <(gum choose --no-limit "${choices[@]}" 2>/dev/null || true)
+  SPICE_FEATURES_ENABLED=""
+  spice_feature_init_defaults "${local_lab}"
+  for def in "${SPICE_FEATURE_DEFS[@]}"; do
+    IFS='|' read -r id _lbl _def _loc _req <<<"${def}"
+    [[ "${_loc}" == "1" && "${local_lab}" != "1" ]] && continue
+    spice_feature_disable "${id}"
+  done
+  for line in "${picked[@]}"; do
+    line="${line%,selected}"
+    for def in "${SPICE_FEATURE_DEFS[@]}"; do
+      IFS='|' read -r id _lbl _def _loc _req <<<"${def}"
+      [[ "${_lbl}" == "${line}" ]] && spice_feature_enable "${id}"
+    done
+  done
+}
+
+spice_select_features_dialog() {
+  local local_lab="${1:-0}" dlg="$2" def id _lbl _def _loc _req
+  local -a args=() out line
+  args=(--separate-output --checklist "Spice optional features" 18 72 12)
+  for def in "${SPICE_FEATURE_DEFS[@]}"; do
+    IFS='|' read -r id _lbl _def _loc _req <<<"${def}"
+    [[ "${_loc}" == "1" && "${local_lab}" != "1" ]] && continue
+    if spice_feature_enabled "${id}"; then
+      args+=("${id}" "${_lbl}" "on")
+    else
+      args+=("${id}" "${_lbl}" "off")
+    fi
+  done
+  out="$("${dlg}" "${args[@]}" 2>/dev/null)" || return 1
+  SPICE_FEATURES_ENABLED=""
+  while IFS= read -r line; do
+    [[ -n "${line}" ]] && spice_feature_enable "${line}"
+  done <<<"${out}"
+  return 0
+}
+
+spice_select_features_interactive() {
+  local local_lab="${1:-0}"
+  if command -v gum >/dev/null 2>&1; then
+    spice_select_features_gum "${local_lab}" && return 0
+  fi
+  if command -v dialog >/dev/null 2>&1; then
+    spice_select_features_dialog "${local_lab}" dialog && return 0
+  fi
+  if command -v whiptail >/dev/null 2>&1; then
+    spice_select_features_dialog "${local_lab}" whiptail && return 0
+  fi
+  spice_select_features_bash_menu "${local_lab}"
+}
+
+spice_select_features() {
+  local local_lab="${1:-0}"
+  SPICE_FEATURE_LOCAL_LAB="${local_lab}"
+
+  if [[ -n "${FEATURES_ALLOW:-}${FEATURES_DENY:-}${SPICE_FEATURES:-}" ]]; then
+    spice_apply_cli_feature_flags
+  fi
+
+  if [[ "${SPICE_SKIP_GITEA_ACTIONS_RUNNER:-0}" == "1" ]]; then
+    spice_feature_disable gitea_actions
+  fi
+
+  if [[ "${SPICE_FEATURES_CLI_CONFIGURED}" != "1" ]]; then
+    spice_feature_init_defaults "${local_lab}"
+  fi
+
+  if [[ "${SPICE_FEATURES_CLI_CONFIGURED}" == "1" ]]; then
+    spice_apply_feature_dependencies
+    spice_features_show_summary
+    return 0
+  fi
+
+  if [[ "${YES:-0}" == "1" ]] || spice_deps_refuse_install; then
+    spice_apply_feature_dependencies
+    spice_features_show_summary
+    return 0
+  fi
+
+  if [[ -t 0 ]]; then
+    echo "" >&2
+    echo "Optional platform components (default: all enabled):" >&2
+    spice_select_features_interactive "${local_lab}"
+  fi
+
+  spice_apply_feature_dependencies
+  spice_features_show_summary
+}
+
+spice_load_features_from_install_env() {
+  [[ -f "${STATE_DIR}/install.env" ]] || return 0
+  # shellcheck source=/dev/null
+  source "${STATE_DIR}/install.env"
+  if [[ -n "${SPICE_FEATURES:-}" ]]; then
+    spice_features_from_env "${SPICE_FEATURES}"
+    SPICE_FEATURES_CLI_CONFIGURED=1
+  fi
 }
 
 effective_release() {
@@ -537,6 +990,7 @@ resolve_bundle_root() {
 
 materialize_tree() {
   local bundle_root="$1"
+  spice_source_gitops_lab_patches "${bundle_root}"
   local out="$2"
   local gitops_url="$3"
   local revision="$4"
@@ -584,11 +1038,17 @@ materialize_tree() {
 
   # Root Argo Application (platform-gitops) only syncs apps/*.yaml — copy optional addon apps here.
   local kps_app="${tpl_dir}/addons/kube-prometheus-stack/application-kube-prometheus-stack.yaml"
-  [[ -f "${kps_app}" ]] && cp "${kps_app}" "${out}/apps/application-kube-prometheus-stack.yaml"
+  if spice_feature_enabled prometheus && [[ -f "${kps_app}" ]]; then
+    cp "${kps_app}" "${out}/apps/application-kube-prometheus-stack.yaml"
+  fi
   local oc_app="${tpl_dir}/addons/opencost/application-opencost.yaml"
-  [[ -f "${oc_app}" ]] && cp "${oc_app}" "${out}/apps/application-opencost.yaml"
+  if spice_feature_enabled opencost && [[ -f "${oc_app}" ]]; then
+    cp "${oc_app}" "${out}/apps/application-opencost.yaml"
+  fi
   local ss_app="${tpl_dir}/addons/superset/application-superset.yaml"
-  [[ -f "${ss_app}" ]] && cp "${ss_app}" "${out}/apps/application-superset.yaml"
+  if spice_feature_enabled superset && [[ -f "${ss_app}" ]]; then
+    cp "${ss_app}" "${out}/apps/application-superset.yaml"
+  fi
 
   # Substitute template tokens (portable sed; no sed -i).
   while IFS= read -r -d '' f; do
@@ -630,7 +1090,9 @@ materialize_tree() {
     fi
   fi
 
-  patch_materialized_addon_credentials "${out}"
+  if spice_feature_enabled prometheus || spice_feature_enabled superset; then
+    patch_materialized_addon_credentials "${out}"
+  fi
 
   printf '%s\n' "${platform_ver}" >"${out}/.spice-platform-version"
 }
@@ -720,6 +1182,10 @@ PY
 
 # Control-plane Superset + related config (ESO → control-plane-env Secret).
 vault_seed_control_plane() {
+  if ! spice_feature_enabled superset; then
+    echo "Skipping Vault Superset seed (Superset feature disabled)." >&2
+    return 0
+  fi
   ensure_lab_addon_password_files
   local spw
   spw="$(tr -d '\n\r' <"${STATE_DIR}/superset-lab.password" 2>/dev/null || true)"
@@ -827,6 +1293,7 @@ GRAFANA_ADMIN_PASSWORD_FILE=${STATE_DIR}/grafana-lab.password
 SUPERSET_ADMIN_PASSWORD_FILE=${STATE_DIR}/superset-lab.password
 SUPERSET_SECRET_KEY_FILE=${STATE_DIR}/superset-lab.secret-key
 GRAFANA_SUPERSET_CREDENTIALS_FILE=${STATE_DIR}/grafana-superset-credentials.txt
+SPICE_FEATURES=$(spice_features_to_env)
 EOF
   if [[ "${SPICE_LOCAL_CLUSTER_MODE:-0}" -eq 1 ]]; then
     {
@@ -908,6 +1375,11 @@ do_upgrade() {
     echo "Upgrade cancelled." >&2
     exit 0
   fi
+  spice_load_features_from_install_env
+  if [[ "${SPICE_FEATURES_CLI_CONFIGURED}" != "1" ]]; then
+    spice_feature_init_defaults 0
+  fi
+  spice_apply_feature_dependencies
   local bundle
   bundle="$(SPICE_RELEASE="${latest}" resolve_bundle_root)"
   materialize_tree "${bundle}" "${out}" "${GITOPS_REPO_URL}" "${GITOPS_TARGET_REVISION:-main}" "${latest}"
@@ -919,6 +1391,8 @@ GITOPS_TARGET_REVISION="${GITOPS_TARGET_REVISION:-main}"
 MODE="install"
 MATERIALIZE_ONLY=""
 YES="${YES:-0}"
+FEATURES_ALLOW=""
+FEATURES_DENY=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -932,6 +1406,8 @@ while [[ $# -gt 0 ]]; do
     --uninstall) MODE="uninstall"; shift ;;
     --all) UNINSTALL_ALL=1; shift ;;
     --yes) YES=1; shift ;;
+    --features) FEATURES_ALLOW="$2"; shift 2 ;;
+    --without-features) FEATURES_DENY="$2"; shift 2 ;;
     *) die "unknown arg: $1" ;;
   esac
 done
@@ -972,6 +1448,9 @@ if [[ -n "${MATERIALIZE_ONLY}" ]]; then
   fi
   [[ "${GITOPS_REPO_URL}" == *.git ]] || GITOPS_REPO_URL="${GITOPS_REPO_URL%.}.git"
   ensure_spice_host_dependencies materialize
+  mat_local_lab=0
+  [[ "${mat_gitops_backend}" == "gitea" ]] && mat_local_lab=1
+  spice_select_features "${mat_local_lab}"
   bundle="$(resolve_bundle_root)"
   ver="$(effective_release)"
   materialize_tree "${bundle}" "${MATERIALIZE_ONLY}" "${GITOPS_REPO_URL}" "${GITOPS_TARGET_REVISION}" "${ver}" "${mat_gitops_backend}"
@@ -1024,6 +1503,7 @@ fi
 [[ "${SPICE_DISABLE_LOCAL_GITOPS:-0}" != "1" ]] || [[ -n "${GITOPS_REPO_URL}" ]] || die "SPICE_DISABLE_LOCAL_GITOPS=1 requires --gitops-repo with an HTTPS .git URL."
 
 ensure_spice_host_dependencies full "${SPICE_LOCAL_CLUSTER_MODE}"
+spice_select_features "${SPICE_LOCAL_CLUSTER_MODE}"
 bundle="$(resolve_bundle_root)"
 ver="$(effective_release)"
 
@@ -1074,7 +1554,9 @@ fi
 kubectl -n vault wait --for=condition=ready pod/vault-0 --timeout=180s
 vault_eso_token
 vault_seed_spice_instances_from_gitops "${SPICE_GITOPS_DIR}"
-ensure_lab_addon_password_files
+if spice_feature_enabled prometheus || spice_feature_enabled superset; then
+  ensure_lab_addon_password_files
+fi
 vault_seed_control_plane
 apply_cluster_store "${SPICE_GITOPS_DIR}"
 argocd_install "${SPICE_GITOPS_DIR}"
@@ -1096,8 +1578,21 @@ write_state
 emit_argocd_admin_credentials
 echo "Bootstrap complete. GitOps materialized at ${SPICE_GITOPS_DIR}"
 if [[ "${SPICE_LOCAL_CLUSTER_MODE}" -eq 1 ]]; then
-  echo "Local-only: browse Gitea at $(gitea_web_url). Credentials: ${STATE_DIR}/gitea-local-credentials.txt (mode 600). Grafana + Superset: ${STATE_DIR}/grafana-superset-credentials.txt. Gitea Actions runner: namespace ${SPICE_GITEA_ACTIONS_NAMESPACE} (Helm release ${SPICE_GITEA_ACTIONS_RELEASE}). The control plane uses Gitea REST (GITOPS_BACKEND=gitea) to list and edit instances in-repo." >&2
+  echo "Local-only: browse Gitea at $(gitea_web_url). Credentials: ${STATE_DIR}/gitea-local-credentials.txt (mode 600)." >&2
+  spice_feature_enabled gitea_actions && echo "Gitea Actions runner: namespace ${SPICE_GITEA_ACTIONS_NAMESPACE} (Helm release ${SPICE_GITEA_ACTIONS_RELEASE})." >&2
+  echo "The control plane uses Gitea REST (GITOPS_BACKEND=gitea) to list and edit instances in-repo." >&2
 else
   echo "Push ${SPICE_GITOPS_DIR} to ${GITOPS_REPO_URL} if not already connected, then sync Argo application platform-gitops."
-  echo "Grafana + Superset lab credentials: ${STATE_DIR}/grafana-superset-credentials.txt" >&2
+fi
+if spice_feature_enabled prometheus || spice_feature_enabled superset; then
+  echo "Grafana/Superset lab credentials (if enabled): ${STATE_DIR}/grafana-superset-credentials.txt" >&2
+fi
+if spice_feature_enabled prometheus; then
+  echo "Grafana: http://grafana.127.0.0.1.nip.io/" >&2
+fi
+if spice_feature_enabled superset; then
+  echo "Superset: http://superset.127.0.0.1.nip.io/" >&2
+fi
+if spice_feature_enabled opencost; then
+  echo "OpenCost UI: http://opencost.127.0.0.1.nip.io/ (see addons/opencost README)" >&2
 fi

@@ -28,7 +28,7 @@ jobs:
           ROOT="spice-platform-${TAG}"
           mkdir -p "dist/${ROOT}/templates"
           cp -r templates/gitops "dist/${ROOT}/templates/"
-          cp -r charts deploy scripts/install.sh examples hack "dist/${ROOT}/"
+          cp -r charts deploy scripts/install.sh scripts/gitops-lab-patches.sh examples hack "dist/${ROOT}/"
           [[ -d .gitea ]] && cp -r .gitea "dist/${ROOT}/" || true
           {
             echo "SPICE_PLATFORM_RELEASE=${TAG}"
