@@ -266,9 +266,13 @@ gitea_create_empty_repo() {
 build_kind_lab_control_plane_images() {
   local bundle_root="$1"
   local cluster_name="$2"
+  local cp_ctx="${bundle_root}/apps/control-plane"
+  local mcp_ctx="${bundle_root}/apps/control-plane-mcp"
+  [[ -f "${cp_ctx}/Dockerfile" ]] || die "missing ${cp_ctx}/Dockerfile (upgrade to a release that bundles apps/ or use SPICE_RELEASE=0.0.0-dev from a git clone)"
+  [[ -f "${mcp_ctx}/Dockerfile" ]] || die "missing ${mcp_ctx}/Dockerfile (upgrade to a release that bundles apps/ or use SPICE_RELEASE=0.0.0-dev from a git clone)"
   echo "Building control-plane + MCP images and loading into Kind (avoids ghcr.io)…" >&2
-  docker build -t spice-cp-local:lab -f "${bundle_root}/apps/control-plane/Dockerfile" "${bundle_root}/apps/control-plane"
-  docker build -t spice-cp-mcp-local:lab -f "${bundle_root}/apps/control-plane-mcp/Dockerfile" "${bundle_root}/apps/control-plane-mcp"
+  docker build -t spice-cp-local:lab -f "${cp_ctx}/Dockerfile" "${cp_ctx}"
+  docker build -t spice-cp-mcp-local:lab -f "${mcp_ctx}/Dockerfile" "${mcp_ctx}"
   kind load docker-image spice-cp-local:lab --name "${cluster_name}"
   kind load docker-image spice-cp-mcp-local:lab --name "${cluster_name}"
 }

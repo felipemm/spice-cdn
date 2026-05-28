@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-05-28
+
+### Fixed
+
+- **Release bundle:** include `apps/control-plane` and `apps/control-plane-mcp` so Kind lab installs can build local images (v0.2.3 tarball lacked `apps/`).
+
+## [0.2.3] - 2026-05-28
+
+### Fixed
+
+- **Installer:** defer sourcing `gitops-lab-patches.sh` until the release bundle is resolved; include the file in release tarballs (fixes `curl | bash` from GitHub Pages).
+
 ## [0.2.2] - 2026-05-28
 
 ### Added
