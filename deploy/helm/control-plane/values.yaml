@@ -96,7 +96,7 @@ mcp:
   port: 8000
   image:
     repository: ghcr.io/felipemm/spice-cdn/control-plane-mcp
-    tag: c80e80430e5bba44cbf77a0bedf9eb314b6ad2a2
+    tag: ab65c32a4bd0206516dd417da553804a0be0bc4f
     pullPolicy: IfNotPresent
   resources:
     limits:
