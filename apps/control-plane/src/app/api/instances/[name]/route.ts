@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { deleteInstance, getValuesYaml, putValuesYaml } from "@/lib/github-service";
 import { isSupersetIntegrationReady, unregisterSpiceInstanceFromSuperset } from "@/lib/superset-service";
+import { deleteInstanceVaultSecrets, isVaultIntegrationReady } from "@/lib/vault";
 
 type Ctx = { params: Promise<{ name: string }> };
 
@@ -37,6 +38,18 @@ export async function DELETE(_request: Request, ctx: Ctx) {
   try {
     await deleteInstance(name);
 
+    let vault: { deleted: boolean; warning?: string } | undefined;
+    if (isVaultIntegrationReady()) {
+      const vd = await deleteInstanceVaultSecrets(name);
+      if (vd.ok) {
+        vault = { deleted: vd.deleted };
+      } else if (vd.skipped) {
+        vault = { deleted: false, warning: vd.reason };
+      } else {
+        vault = { deleted: false, warning: vd.error };
+      }
+    }
+
     let superset: { unregistered: boolean; warning?: string } | undefined;
     if (isSupersetIntegrationReady()) {
       const un = await unregisterSpiceInstanceFromSuperset(name);
@@ -49,7 +62,7 @@ export async function DELETE(_request: Request, ctx: Ctx) {
       }
     }
 
-    return NextResponse.json({ ok: true, superset });
+    return NextResponse.json({ ok: true, vault, superset });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -4,6 +4,9 @@ ingress:
   enabled: true
   className: nginx
   host: spice-INSTANCE.127.0.0.1.nip.io
+  flightSQL:
+    enabled: true
+    port: 50051
 
 externalSecret:
   enabled: true

@@ -277,6 +277,17 @@ build_kind_lab_control_plane_images() {
   kind load docker-image spice-cp-mcp-local:lab --name "${cluster_name}"
 }
 
+# Kind cluster may exist while kubeconfig lacks kind-<name> (stale config, new shell, partial uninstall).
+ensure_kind_cluster_kubecontext() {
+  local kind_cfg="$1"
+  local ctx="kind-${CLUSTER_NAME}"
+  if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}\$"; then
+    kind create cluster --name "${CLUSTER_NAME}" --config "${kind_cfg}"
+  fi
+  kind export kubeconfig --name "${CLUSTER_NAME}"
+  kubectl config use-context "${ctx}"
+}
+
 gitea_push_materialized_workdir() {
   local work="$1"
   local admin_pass="$2"
@@ -1241,7 +1252,7 @@ argocd_install() {
   kubectl -n argocd rollout status deploy/argocd-server --timeout=300s
 }
 
-# Decode and print the bootstrap admin password (the chart creates argocd-initial-admin-secret once).
+# Wait for Argo CD bootstrap secret and persist the initial admin password (printed in install summary).
 emit_argocd_admin_credentials() {
   local pw="" pwfile="${STATE_DIR}/argocd-initial-admin-password.txt" i
   for i in $(seq 1 90); do
@@ -1257,15 +1268,170 @@ emit_argocd_admin_credentials() {
     umask 077
     printf '%s\n' "${pw}" >"${pwfile}"
     chmod 600 "${pwfile}" 2>/dev/null || true
-    echo "" >&2
-    echo "Argo CD UI: http://argocd.127.0.0.1.nip.io/  — sign in as admin with the password below (same value in ${pwfile})." >&2
-    echo "Argo CD admin password: ${pw}" >&2
     if [[ -f "${STATE_DIR}/install.env" ]]; then
-      printf '\nARGOCD_INITIAL_ADMIN_PASSWORD_FILE=%s\n' "${pwfile}" >>"${STATE_DIR}/install.env"
+      grep -q '^ARGOCD_INITIAL_ADMIN_PASSWORD_FILE=' "${STATE_DIR}/install.env" 2>/dev/null \
+        || printf '\nARGOCD_INITIAL_ADMIN_PASSWORD_FILE=%s\n' "${pwfile}" >>"${STATE_DIR}/install.env"
     fi
-  else
-    :
   fi
+}
+
+spice_read_secret_file() {
+  local f="$1"
+  [[ -s "${f}" ]] || return 0
+  tr -d '\n\r' <"${f}"
+}
+
+spice_control_plane_ingress_url() {
+  local vf="${SPICE_GITOPS_DIR}/deploy/helm/control-plane/values.yaml"
+  local host="control-plane.127.0.0.1.nip.io"
+  if [[ -f "${vf}" ]]; then
+    host="$(sed -n 's/^[[:space:]]*host:[[:space:]]*//p' "${vf}" | head -1 | tr -d "\"'")"
+    [[ -n "${host}" ]] || host="control-plane.127.0.0.1.nip.io"
+  fi
+  printf 'http://%s/' "${host}"
+}
+
+spice_read_control_plane_admin_key() {
+  local k=""
+  k="$(spice_read_secret_file "${STATE_DIR}/control-plane-admin-api-key.txt")"
+  if [[ -n "${k}" ]]; then
+    printf '%s' "${k}"
+    return 0
+  fi
+  kubectl -n control-plane get secret control-plane-secrets -o jsonpath='{.data.admin_api_key}' 2>/dev/null \
+    | base64 -d 2>/dev/null || true
+}
+
+spice_summary_print_service() {
+  local name="$1" url="$2" user="${3:-}" pass="${4:-}" note="${5:-}"
+  printf '  %s\n' "${name}"
+  printf '    URL:      %s\n' "${url}"
+  if [[ -n "${user}" ]]; then
+    printf '    Username: %s\n' "${user}"
+  fi
+  if [[ -n "${pass}" ]]; then
+    printf '    Password: %s\n' "${pass}"
+  elif [[ -n "${note}" ]]; then
+    printf '    Login:    %s\n' "${note}"
+  fi
+  if [[ -n "${note}" && -n "${pass}" ]]; then
+    printf '    Note:     %s\n' "${note}"
+  fi
+  printf '\n'
+}
+
+emit_installation_summary() {
+  local ver argo_pw gpw spw cp_key vault_token summary_file
+  ver="$(effective_release)"
+  summary_file="${STATE_DIR}/installation-summary.txt"
+  umask 077
+
+  {
+    printf 'Spice platform — installation summary\n'
+    printf 'Generated: %s\n' "$(date -u +"%Y-%m-%d %H:%M:%S UTC" 2>/dev/null || date)"
+    printf 'Release: %s | Cluster: %s | State: %s\n' "${ver}" "${CLUSTER_NAME}" "${STATE_DIR}"
+    printf 'Materialized GitOps: %s\n\n' "${SPICE_GITOPS_DIR}"
+
+    printf '── Web UIs ──\n\n'
+
+    cp_key="$(spice_read_control_plane_admin_key)"
+    spice_summary_print_service "Control plane" "$(spice_control_plane_ingress_url)" "" "" \
+      "Open the UI in a browser; use /admin with the admin API key below"
+    if [[ -n "${cp_key}" ]]; then
+      printf '    Admin API key (/admin): %s\n' "${cp_key}"
+      printf '    Key file: %s\n\n' "${STATE_DIR}/control-plane-admin-api-key.txt"
+    else
+      printf '\n'
+    fi
+
+    argo_pw="$(spice_read_secret_file "${STATE_DIR}/argocd-initial-admin-password.txt")"
+    if [[ -n "${argo_pw}" ]]; then
+      spice_summary_print_service "Argo CD" "http://argocd.127.0.0.1.nip.io/" "admin" "${argo_pw}"
+    else
+      spice_summary_print_service "Argo CD" "http://argocd.127.0.0.1.nip.io/" "admin" "" \
+        "Initial admin password not ready yet — check: kubectl -n argocd get secret argocd-initial-admin-secret"
+    fi
+
+    if [[ "${SPICE_LOCAL_CLUSTER_MODE:-0}" -eq 1 ]]; then
+      spice_summary_print_service "Gitea" "$(gitea_web_url)" "${SPICE_GITEA_ADMIN_USER}" "${GITOPS_PAT}" \
+        "Same password is used for Argo Git credentials"
+    fi
+
+    if spice_feature_enabled prometheus; then
+      gpw="$(spice_read_secret_file "${STATE_DIR}/grafana-lab.password")"
+      if [[ -n "${gpw}" ]]; then
+        spice_summary_print_service "Grafana" "http://grafana.127.0.0.1.nip.io/" "admin" "${gpw}"
+      else
+        spice_summary_print_service "Grafana" "http://grafana.127.0.0.1.nip.io/" "admin" "admin" \
+          "Random password not found — Argo may still be syncing kube-prometheus-stack"
+      fi
+    fi
+
+    if spice_feature_enabled superset; then
+      spw="$(spice_read_secret_file "${STATE_DIR}/superset-lab.password")"
+      if [[ -n "${spw}" ]]; then
+        spice_summary_print_service "Superset" "http://superset.127.0.0.1.nip.io/" "admin" "${spw}"
+      else
+        spice_summary_print_service "Superset" "http://superset.127.0.0.1.nip.io/" "admin" "" \
+          "Password file missing — wait for Argo to sync the Superset Application"
+      fi
+    fi
+
+    if spice_feature_enabled opencost; then
+      spice_summary_print_service "OpenCost" "http://opencost.127.0.0.1.nip.io/" "" "" \
+        "No login in the Kind lab UI"
+    fi
+
+    if [[ "${SPICE_LOCAL_CLUSTER_MODE:-0}" -eq 1 ]] && spice_feature_enabled gitea_actions; then
+      printf '  Gitea Actions runner\n'
+      printf '    Status:   Helm release %s in namespace %s (no web UI)\n\n' \
+        "${SPICE_GITEA_ACTIONS_RELEASE}" "${SPICE_GITEA_ACTIONS_NAMESPACE}"
+    fi
+
+    vault_token="$(kubectl -n vault logs vault-0 2>/dev/null | sed -n 's/^Root Token: //p' | head -1 || true)"
+    if [[ -n "${vault_token}" ]]; then
+      printf '── Cluster APIs (dev lab) ──\n\n'
+      spice_summary_print_service "Vault" "http://vault.vault.svc.cluster.local:8200" "(root token)" "${vault_token}" \
+        "In-cluster only; control plane uses a dedicated Vault role"
+    fi
+
+    printf '── Credential files (mode 600) ──\n\n'
+    printf '  %s/install.env\n' "${STATE_DIR}"
+    [[ -f "${STATE_DIR}/argocd-initial-admin-password.txt" ]] && \
+      printf '  %s/argocd-initial-admin-password.txt\n' "${STATE_DIR}"
+    [[ -f "${STATE_DIR}/control-plane-admin-api-key.txt" ]] && \
+      printf '  %s/control-plane-admin-api-key.txt\n' "${STATE_DIR}"
+    [[ "${SPICE_LOCAL_CLUSTER_MODE:-0}" -eq 1 && -f "${STATE_DIR}/gitea-local-credentials.txt" ]] && \
+      printf '  %s/gitea-local-credentials.txt\n' "${STATE_DIR}"
+    [[ -f "${STATE_DIR}/grafana-superset-credentials.txt" ]] && \
+      printf '  %s/grafana-superset-credentials.txt\n' "${STATE_DIR}"
+    printf '\n'
+
+    printf '── What to do next ──\n\n'
+    if [[ "${SPICE_LOCAL_CLUSTER_MODE:-0}" -eq 1 ]]; then
+      printf '  1. Wait 5–15 minutes for Argo CD to sync child Applications (Grafana/Superset can take longer).\n'
+      printf '  2. Open Argo CD (%s) and confirm platform-gitops and addons are Healthy/Synced.\n' \
+        "http://argocd.127.0.0.1.nip.io/"
+      printf '  3. Open the control plane (%s), go to /admin, and paste the admin API key.\n' \
+        "$(spice_control_plane_ingress_url)"
+      printf '  4. Create or inspect Spice instances from the control plane UI.\n'
+      printf '  5. Optional: browse Gitea at %s (GitOps repo: %s).\n' \
+        "$(gitea_web_url)" "${SPICE_GITEA_REPO_NAME}"
+      printf '  6. Upgrade materialized GitOps: install.sh --upgrade\n'
+      printf '  7. Remove the lab cluster: install.sh --uninstall --all --yes\n'
+    else
+      printf '  1. Push the materialized tree to your GitOps repo if needed:\n'
+      printf '       %s\n' "${GITOPS_REPO_URL}"
+      printf '       (local copy: %s)\n' "${SPICE_GITOPS_DIR}"
+      printf '  2. In Argo CD, sync application platform-gitops and wait for child apps.\n'
+      printf '  3. Open the control plane (%s) and use /admin with the admin API key.\n' \
+        "$(spice_control_plane_ingress_url)"
+      printf '  4. Upgrade: install.sh --upgrade\n'
+      printf '  5. Remove the Kind cluster: install.sh --uninstall --all --yes\n'
+    fi
+  } | tee "${summary_file}" >&2
+
+  chmod 600 "${summary_file}" 2>/dev/null || true
 }
 
 apply_cluster_store() {
@@ -1297,6 +1463,8 @@ GRAFANA_ADMIN_PASSWORD_FILE=${STATE_DIR}/grafana-lab.password
 SUPERSET_ADMIN_PASSWORD_FILE=${STATE_DIR}/superset-lab.password
 SUPERSET_SECRET_KEY_FILE=${STATE_DIR}/superset-lab.secret-key
 GRAFANA_SUPERSET_CREDENTIALS_FILE=${STATE_DIR}/grafana-superset-credentials.txt
+CONTROL_PLANE_ADMIN_API_KEY_FILE=${STATE_DIR}/control-plane-admin-api-key.txt
+INSTALLATION_SUMMARY_FILE=${STATE_DIR}/installation-summary.txt
 SPICE_FEATURES=$(spice_features_to_env)
 EOF
   if [[ "${SPICE_LOCAL_CLUSTER_MODE:-0}" -eq 1 ]]; then
@@ -1515,10 +1683,7 @@ KIND_CFG="${bundle}/hack/kind-config.yaml"
 [[ -f "${KIND_CFG}" ]] || KIND_CFG="${REPO_ROOT}/hack/kind-config.yaml"
 
 if [[ "${SPICE_LOCAL_CLUSTER_MODE}" -eq 1 ]]; then
-  if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}\$"; then
-    kind create cluster --name "${CLUSTER_NAME}" --config "${KIND_CFG}"
-  fi
-  kubectl config use-context "kind-${CLUSTER_NAME}"
+  ensure_kind_cluster_kubecontext "${KIND_CFG}"
 
   helm_bootstrap "${bundle}"
 
@@ -1544,10 +1709,7 @@ if [[ "${SPICE_LOCAL_CLUSTER_MODE}" -eq 1 ]]; then
   wait "${GITEA_PF_PID}" 2>/dev/null || true
 else
   materialize_tree "${bundle}" "${SPICE_GITOPS_DIR}" "${SPICE_GIT_EFFECTIVE_REPO_URL}" "${GITOPS_TARGET_REVISION}" "${ver}"
-  if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}\$"; then
-    kind create cluster --name "${CLUSTER_NAME}" --config "${KIND_CFG}"
-  fi
-  kubectl config use-context "kind-${CLUSTER_NAME}"
+  ensure_kind_cluster_kubecontext "${KIND_CFG}"
   helm_bootstrap "${SPICE_GITOPS_DIR}"
 fi
 
@@ -1572,31 +1734,19 @@ apply_root_app "${SPICE_GITOPS_DIR}"
 
 kubectl create namespace control-plane --dry-run=client -o yaml | kubectl apply -f -
 vt="$(kubectl -n vault logs vault-0 2>/dev/null | sed -n 's/^Root Token: //p' | head -1)"
+CP_ADMIN_API_KEY="$(openssl rand -hex 24)"
+umask 077
+printf '%s\n' "${CP_ADMIN_API_KEY}" >"${STATE_DIR}/control-plane-admin-api-key.txt"
+chmod 600 "${STATE_DIR}/control-plane-admin-api-key.txt" 2>/dev/null || true
 kubectl -n control-plane create secret generic control-plane-secrets \
   --from-literal=gitops_token="${GITOPS_PAT}" \
   --from-literal=vault_token="${vt}" \
-  --from-literal=admin_api_key="$(openssl rand -hex 24)" \
+  --from-literal=admin_api_key="${CP_ADMIN_API_KEY}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 write_state
 emit_argocd_admin_credentials
-echo "Bootstrap complete. GitOps materialized at ${SPICE_GITOPS_DIR}"
-if [[ "${SPICE_LOCAL_CLUSTER_MODE}" -eq 1 ]]; then
-  echo "Local-only: browse Gitea at $(gitea_web_url). Credentials: ${STATE_DIR}/gitea-local-credentials.txt (mode 600)." >&2
-  spice_feature_enabled gitea_actions && echo "Gitea Actions runner: namespace ${SPICE_GITEA_ACTIONS_NAMESPACE} (Helm release ${SPICE_GITEA_ACTIONS_RELEASE})." >&2
-  echo "The control plane uses Gitea REST (GITOPS_BACKEND=gitea) to list and edit instances in-repo." >&2
-else
-  echo "Push ${SPICE_GITOPS_DIR} to ${GITOPS_REPO_URL} if not already connected, then sync Argo application platform-gitops."
-fi
-if spice_feature_enabled prometheus || spice_feature_enabled superset; then
-  echo "Grafana/Superset lab credentials (if enabled): ${STATE_DIR}/grafana-superset-credentials.txt" >&2
-fi
-if spice_feature_enabled prometheus; then
-  echo "Grafana: http://grafana.127.0.0.1.nip.io/" >&2
-fi
-if spice_feature_enabled superset; then
-  echo "Superset: http://superset.127.0.0.1.nip.io/" >&2
-fi
-if spice_feature_enabled opencost; then
-  echo "OpenCost UI: http://opencost.127.0.0.1.nip.io/ (see addons/opencost README)" >&2
-fi
+echo "" >&2
+echo "Bootstrap complete. GitOps materialized at ${SPICE_GITOPS_DIR}" >&2
+echo "" >&2
+emit_installation_summary

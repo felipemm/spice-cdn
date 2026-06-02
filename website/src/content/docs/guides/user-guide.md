@@ -19,6 +19,8 @@ If you maintain this site in a **fork**, update the GitHub links on this page to
 
 This project is the **product repository**: the Next.js **control plane**, Helm charts, GitOps **templates**, CI, and the **Kind + GitOps installer**. What Argo CD reconciles in the cluster lives in a **separate GitOps repository** that you own.
 
+New to Spice? Start with [What is Spice CDN?](./what-is-spice-cdn) for a plain-language overview of Spice.ai, database CDN, and what you build with this platform.
+
 For architecture diagrams and the split between product and GitOps, see the repository [README](https://github.com/felipemm/spice-cdn#readme) and [Product vs GitOps](./architecture).
 
 ---

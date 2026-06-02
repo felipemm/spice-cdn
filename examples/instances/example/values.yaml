@@ -5,6 +5,9 @@ ingress:
   enabled: true
   className: nginx
   host: spice-example.127.0.0.1.nip.io
+  flightSQL:
+    enabled: true
+    port: 50051
 
 # ExternalSecret syncs Vault KV (mount secret, path vaultPath) into targetSecretName.
 # The path must contain at least one key or ESO can leave the ExternalSecret Degraded — see vault-seed.json and docs/tutorial.md.

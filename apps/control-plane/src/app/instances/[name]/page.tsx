@@ -170,7 +170,12 @@ export default function InstanceDetailPage() {
   }
 
   async function remove() {
-    if (!confirm(`Delete instance ${name} from Git?`)) return;
+    if (
+      !confirm(
+        `Delete instance ${name}? This removes GitOps files, Vault secrets (spice/instances/${name}), and the Superset database connection when configured.`,
+      )
+    )
+      return;
     setBusy(true);
     try {
       const res = await fetch(`/api/instances/${encodeURIComponent(name)}`, { method: "DELETE" });

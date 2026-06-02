@@ -10,6 +10,49 @@ type InstanceIngress = {
   host?: string;
 };
 
+type FlightSQLIngress = {
+  enabled?: boolean;
+  host?: string;
+};
+
+/** Matches charts/spice-instance `spice-instance.flightSqlIngressHost` helper. */
+export function flightSqlIngressHostFromIngress(ingress: {
+  host?: string;
+  flightSQL?: FlightSQLIngress;
+}): string | null {
+  const httpHost = typeof ingress.host === "string" ? ingress.host.trim() : "";
+  if (!httpHost) return null;
+  const explicit = typeof ingress.flightSQL?.host === "string" ? ingress.flightSQL.host.trim() : "";
+  if (explicit) return explicit;
+  const dot = httpHost.indexOf(".");
+  if (dot === -1) return null;
+  const first = httpHost.slice(0, dot);
+  const rest = httpHost.slice(dot + 1);
+  return `${first}-flight.${rest}`;
+}
+
+/** Arrow Flight SQL URL from instance values.yaml (dedicated flight hostname on ingress :80/:443). */
+export function spiceFlightSqlUrlFromValuesYaml(yamlText: string): string | null {
+  let doc: unknown;
+  try {
+    doc = YAML.parse(yamlText);
+  } catch {
+    return null;
+  }
+  if (!doc || typeof doc !== "object") return null;
+  const ingress = (doc as { ingress?: InstanceIngress & { flightSQL?: FlightSQLIngress; tls?: { enabled?: boolean } } })
+    .ingress;
+  if (!ingress) return null;
+  if (ingress.enabled === false) return null;
+  if (typeof ingress.host !== "string" || !ingress.host.trim()) return null;
+  const flight = ingress.flightSQL;
+  if (flight?.enabled === false) return null;
+  const fh = flightSqlIngressHostFromIngress(ingress);
+  if (!fh) return null;
+  const tls = ingress.tls?.enabled === true;
+  return tls ? `grpcs://${fh}` : `grpc://${fh}`;
+}
+
 /** Public browser URL for the Spice HTTP API from instance values.yaml (ingress.host). */
 export function spicePublicUrlFromValuesYaml(yamlText: string): string | null {
   let doc: unknown;

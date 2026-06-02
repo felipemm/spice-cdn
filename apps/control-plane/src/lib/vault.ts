@@ -1,5 +1,14 @@
 import { getVaultConfig } from "@/lib/config";
 
+/** KV v2 path under mount `secret` (ESO / control-plane convention). */
+export function instanceVaultPath(name: string): string {
+  return `spice/instances/${name}`;
+}
+
+export function isVaultIntegrationReady(): boolean {
+  return Boolean(getVaultConfig().token);
+}
+
 function vaultFetchErrorHint(err: unknown): string {
   if (err instanceof TypeError && err.message === "fetch failed") {
     const cause = "cause" in err && err.cause != null ? ` (${String(err.cause)})` : "";
@@ -57,6 +66,49 @@ export async function vaultWriteData(path: string, data: Record<string, string>)
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Vault write failed (${res.status}): ${text}`);
+  }
+}
+
+/** Permanently removes all KV v2 versions at `path` (metadata delete). */
+export async function vaultDeleteMetadata(path: string): Promise<boolean> {
+  const { addr, token } = getVaultConfig();
+  if (!token) {
+    throw new Error("VAULT_TOKEN is not configured.");
+  }
+  const url = `${addr.replace(/\/$/, "")}/v1/secret/metadata/${path.replace(/^\/+/, "")}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "DELETE",
+      headers: { "X-Vault-Token": token },
+      cache: "no-store",
+    });
+  } catch (e) {
+    throw new Error(vaultFetchErrorHint(e));
+  }
+  if (res.status === 404) return false;
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Vault delete failed (${res.status}): ${text}`);
+  }
+  return true;
+}
+
+export type VaultDeleteOutcome =
+  | { ok: true; deleted: boolean }
+  | { ok: false; skipped: true; reason: string }
+  | { ok: false; skipped: false; error: string };
+
+export async function deleteInstanceVaultSecrets(instanceName: string): Promise<VaultDeleteOutcome> {
+  if (!isVaultIntegrationReady()) {
+    return { ok: false, skipped: true, reason: "VAULT_TOKEN is not configured" };
+  }
+  try {
+    const deleted = await vaultDeleteMetadata(instanceVaultPath(instanceName));
+    return { ok: true, deleted };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : String(e);
+    return { ok: false, skipped: false, error: err };
   }
 }
 

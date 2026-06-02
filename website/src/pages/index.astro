@@ -32,9 +32,10 @@ const productRepo = "https://github.com/felipemm/spice-cdn";
           Spice CDN
         </a>
         <nav class="site-nav" aria-label="Primary">
+          <a href="#understanding">Concepts</a>
           <a href="#features">Features</a>
           <a href="#how-it-works">How it works</a>
-          <a href={docs("guides/user-guide/")}>Docs</a>
+          <a href={docs("guides/what-is-spice-cdn/")}>Docs</a>
           <a href={docs("guides/install/")} class="nav-cta">Get started</a>
         </nav>
       </div>
@@ -51,7 +52,8 @@ const productRepo = "https://github.com/felipemm/spice-cdn";
         </p>
         <div class="hero-actions">
           <a class="btn btn-primary" href={docs("guides/install/")}>Install guide</a>
-          <a class="btn btn-secondary" href={docs("guides/architecture/")}>Architecture</a>
+          <a class="btn btn-secondary" href="#understanding">What am I building?</a>
+          <a class="btn btn-secondary" href={docs("guides/what-is-spice-cdn/")}>Full explanation</a>
           <a class="btn btn-secondary" href={productRepo} target="_blank" rel="noopener noreferrer">GitHub</a>
         </div>
         <div class="install-block">
@@ -62,6 +64,105 @@ const productRepo = "https://github.com/felipemm/spice-cdn";
               Copy
             </button>
           </div>
+        </div>
+      </section>
+
+      <section class="section shell" id="understanding">
+        <div class="section-header">
+          <h2>Three ideas — in plain language</h2>
+          <p>
+            Before you install anything, it helps to separate <strong>Spice.ai</strong> (the data engine), <strong
+              >database CDN</strong
+            > (what Spice does with your tables), and <strong>Spice CDN</strong> (this GitOps platform).
+          </p>
+        </div>
+        <div class="concept-grid">
+          <article class="concept-card">
+            <p class="concept-label">1 · The engine</p>
+            <h3>Spice.ai</h3>
+            <p>
+              An open-source runtime that talks to Postgres, S3, Databricks, and dozens of other sources. Your apps query
+              Spice over SQL/HTTP instead of wiring every database themselves. It can also run search and AI features on
+              the same data.
+            </p>
+            <p class="concept-analogy"><strong>Think of it as:</strong> a smart data front door for your applications.</p>
+          </article>
+          <article class="concept-card concept-card-accent">
+            <p class="concept-label">2 · The data pattern</p>
+            <h3>Database CDN</h3>
+            <p>
+              Like a CDN caches images near users, Spice keeps a <strong>fresh local copy</strong> of hot tables near your
+              app. Reads hit the copy (fast); Spice refreshes from the real database in the background. That is
+              <em>data acceleration</em> — not caching random query results in Redis.
+            </p>
+            <p class="concept-analogy"><strong>Think of it as:</strong> a nearby copy of the rows your app reads all day.</p>
+          </article>
+          <article class="concept-card">
+            <p class="concept-label">3 · This project</p>
+            <h3>Spice CDN platform</h3>
+            <p>
+              The installer, control-plane UI, Helm charts, and GitOps templates in <em>this</em> repo. They do
+              <strong>not</strong> replace Spice.ai — they help you run many Spice instances on Kubernetes with Argo CD,
+              Vault secrets, and versioned releases.
+            </p>
+            <p class="concept-analogy"><strong>Think of it as:</strong> the ops kit that ships and manages Spice for your team.</p>
+          </article>
+        </div>
+        <div class="compare-table-wrap">
+          <table class="compare-table">
+            <caption class="sr-only">Comparison of CDN types</caption>
+            <thead>
+              <tr>
+                <th scope="col"></th>
+                <th scope="col">Traditional CDN</th>
+                <th scope="col">Database CDN (Spice.ai)</th>
+                <th scope="col">Spice CDN (this repo)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">What moves closer?</th>
+                <td>Static files (JS, images)</td>
+                <td>Database tables &amp; datasets</td>
+                <td>Spice runtimes + GitOps config</td>
+              </tr>
+              <tr>
+                <th scope="row">Who uses it?</th>
+                <td>Websites</td>
+                <td>Apps, APIs, dashboards, AI</td>
+                <td>Platform / data engineers</td>
+              </tr>
+              <tr>
+                <th scope="row">You configure via</th>
+                <td>CDN dashboard</td>
+                <td><code>spicepod.yaml</code></td>
+                <td>GitOps repo + control plane UI</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="outcome-box">
+          <h3>What you create when you use this project</h3>
+          <ol class="outcome-list">
+            <li>
+              <strong>Your GitOps repo</strong> — Argo CD syncs <code>instances/*</code> and platform apps from here (not
+              from this product repo).
+            </li>
+            <li>
+              <strong>A Kubernetes cluster</strong> — ingress, Vault, External Secrets, Argo CD (bootstrapped by
+              <code>install.sh</code>).
+            </li>
+            <li>
+              <strong>Spice instances</strong> — each one is a deployed Spice.ai that can federate and accelerate your data
+              (database CDN behavior per instance).
+            </li>
+            <li>
+              <strong>Optional add-ons</strong> — Grafana, OpenCost, Superset hooks when you enable them in GitOps.
+            </li>
+          </ol>
+          <p class="outcome-footer">
+            <a href={docs("guides/what-is-spice-cdn/")}>Read the full guide →</a>
+          </p>
         </div>
       </section>
 

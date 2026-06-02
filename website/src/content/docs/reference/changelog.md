@@ -16,6 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-06-02
+
+### Added
+
+- **Arrow Flight SQL ingress:** optional second `Ingress` for gRPC (`ingress.flightSQL`, template `ingress-flight.yaml`) with a dedicated `-flight` hostname, nginx `backend-protocol: GRPC`, and tunable annotations; chart README covers client URLs.
+- **Control plane:** derive **Flight SQL** URL from instance `values.yaml` (`spiceFlightSqlUrlFromValuesYaml`); centralized Vault KV path `spice/instances/<name>` and **metadata delete** when deleting an instance (with `VAULT_TOKEN`).
+- **Installer:** `ensure_kind_cluster_kubecontext` when the Kind cluster exists but the shell has no `kind-*` context; persist **Argo CD initial admin password** path in `install.env`; emit **`installation-summary.txt`** (release, GitOps dir, control-plane / Argo / Grafana / Vault / Gitea pointers and admin API key).
+
+### Changed
+
+- **Helm:** `charts/spice-instance` chart version **0.1.1** (Flight SQL ingress and values shape).
+- **New instance template** and CI examples enable `ingress.flightSQL` by default alongside HTTP ingress.
+- **Instance delete** UI confirmation and MCP `delete_spice_instance` docstring describe GitOps + Vault + Superset cleanup.
+- **Docs site:** home page refresh; architecture and user-guide updates; **What is Spice CDN** guide; Excalidraw architecture diagram assets and helper scripts under `docs/diagrams/` and `scripts/`.
+
 ## [0.2.4] - 2026-05-28
 
 ### Fixed
@@ -119,7 +134,10 @@ First public platform release: product repository + operator-owned GitOps reposi
 
 - **Repository layout:** runtime GitOps is no longer the source of truth in this repo; `gitops/` at repo root is a pointer — templates live in `templates/gitops/`.
 
-[unreleased]: https://github.com/felipemm/spice-cdn/compare/v0.2.2...HEAD
+[unreleased]: https://github.com/felipemm/spice-cdn/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/felipemm/spice-cdn/compare/v0.2.4...v0.2.5
+[0.2.4]: https://github.com/felipemm/spice-cdn/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/felipemm/spice-cdn/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/felipemm/spice-cdn/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/felipemm/spice-cdn/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/felipemm/spice-cdn/compare/v0.1.1...v0.2.0

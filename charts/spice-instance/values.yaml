@@ -14,7 +14,17 @@ ingress:
   # Spice HTTP API port on the workload Service. Clients use the ingress hostname on standard :80/:443; nginx forwards here.
   httpBackendPort: 8090
   metricsBackendPort: 9090
-  flightSQLEndpoint: 50051
+  # Arrow Flight SQL (gRPC) via a second Ingress (ingress-nginx backend-protocol GRPC).
+  # Uses its own hostname (see flightSQL.host) so path / does not collide with the HTTP Ingress on ingress.host.
+  # In-cluster: grpc://<release>-spiceai.<ns>.svc.cluster.local:50051
+  flightSQL:
+    enabled: true
+    port: 50051
+    # If empty, defaults to "<first-label>-flight.<rest>" of ingress.host (e.g. spice-x.127.0.0.1.nip.io -> spice-x-flight.127.0.0.1.nip.io).
+    host: ""
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
   tls:
     enabled: false
     secretName: ""

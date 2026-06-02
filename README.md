@@ -2,7 +2,7 @@
 
 This repository is the **product**: Next.js control plane, Helm charts, installer, CI, and documentation site source. **Runtime GitOps** (what Argo CD reconciles) lives in a **separate repository** that you own.
 
-**New here?** Read the **[user guide](docs/USER_GUIDE.md)** (quick start, optional settings, and end-to-end steps). Deep-dive Kind bootstrap steps are in **[docs/tutorial.md](docs/tutorial.md)**. Latest release: **[v0.2.2](https://github.com/felipemm/spice-cdn/releases/tag/v0.2.2)** — full history in **[CHANGELOG.md](CHANGELOG.md)**.
+**New here?** Read the **[user guide](docs/USER_GUIDE.md)** (quick start, optional settings, and end-to-end steps). Deep-dive Kind bootstrap steps are in **[docs/tutorial.md](docs/tutorial.md)**. Latest release: **[v0.2.5](https://github.com/felipemm/spice-cdn/releases/tag/v0.2.5)** — full history in **[CHANGELOG.md](CHANGELOG.md)**.
 
 ```mermaid
 flowchart LR
@@ -37,6 +37,7 @@ flowchart LR
 | [`scripts/install.sh`](scripts/install.sh) | Downloads a **GitHub Release** tarball, materializes a GitOps tree, bootstraps Kind + ingress + Vault + ESO + Argo. |
 | [`website/`](website/) | Astro + Starlight site; build copies `install.sh` to `public/`. |
 | [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) | **Full user guide:** quick start, optional install settings, step-by-step flow. |
+| [`docs/diagrams/spice-cdn-architecture.excalidraw`](docs/diagrams/spice-cdn-architecture.excalidraw) | Architecture diagram (Excalidraw; technical + plain-English). |
 | [`docs/tutorial.md`](docs/tutorial.md) | Manual Kind walkthrough (paths use `templates/gitops/bootstrap/...`). |
 | [`docs/migration-two-repos.md`](docs/migration-two-repos.md) | Move from monorepo to product + GitOps. |
 | [`CHANGELOG.md`](CHANGELOG.md) | Notable changes per release ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)). |
@@ -53,10 +54,10 @@ flowchart LR
 curl -fsSL "https://<owner>.github.io/<repo>/install.sh" | bash
 ```
 
-The served `install.sh` is copied from this repo at build time; **releases** set `SPICE_PACKAGED_RELEASE` inside the packaged script. Override with `SPICE_RELEASE=vX.Y.Z` (latest: **`v0.2.2`**).
+The served `install.sh` is copied from this repo at build time; **releases** set `SPICE_PACKAGED_RELEASE` inside the packaged script. Override with `SPICE_RELEASE=vX.Y.Z` (latest: **`v0.2.5`**).
 
 ```bash
-export SPICE_RELEASE=v0.2.2
+export SPICE_RELEASE=v0.2.5
 curl -fsSL "https://felipemm.github.io/spice-cdn/install.sh" | bash
 ```
 
@@ -101,6 +102,9 @@ Tag `v*` → workflow [`.github/workflows/release.yml`](.github/workflows/releas
 
 | Tag | Notes |
 |-----|--------|
+| [v0.2.5](https://github.com/felipemm/spice-cdn/releases/tag/v0.2.5) | Flight SQL ingress; Vault cleanup on instance delete; install summary + Kind kubecontext hardening |
+| [v0.2.4](https://github.com/felipemm/spice-cdn/releases/tag/v0.2.4) | Release tarball bundles `apps/` for Kind local image builds |
+| [v0.2.3](https://github.com/felipemm/spice-cdn/releases/tag/v0.2.3) | Installer defers lab patches until bundle resolved; `gitops-lab-patches.sh` in tarball |
 | [v0.2.2](https://github.com/felipemm/spice-cdn/releases/tag/v0.2.2) | Optional install feature menu; host dependency bootstrap; OpenCost custom pricing |
 | [v0.2.1](https://github.com/felipemm/spice-cdn/releases/tag/v0.2.1) | Argo CD memory for large Helm syncs; Superset Postgres PVC on Kind |
 | [v0.2.0](https://github.com/felipemm/spice-cdn/releases/tag/v0.2.0) | Local Gitea lab, Superset integration, release docs |

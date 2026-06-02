@@ -3,6 +3,10 @@ title: Product vs GitOps
 description: Two-repository model and what lives where.
 ---
 
+## Architecture diagram
+
+Open [`docs/diagrams/spice-cdn-architecture.excalidraw`](https://github.com/felipemm/spice-cdn/blob/main/docs/diagrams/spice-cdn-architecture.excalidraw) in [Excalidraw](https://excalidraw.com) or the VS Code Excalidraw extension. It includes technical layers and plain-English callouts. Regenerate with `node scripts/generate-architecture-diagram.mjs`.
+
 ## Repositories
 
 | | **Product repo** | **GitOps repo** |

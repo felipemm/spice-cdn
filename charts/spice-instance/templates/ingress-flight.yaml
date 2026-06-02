@@ -1,0 +1,41 @@
+{{- if and .Values.ingress.enabled .Values.ingress.flightSQL.enabled }}
+{{- $slug := include "spice-instance.ownerLayerSlug" . }}
+{{- $flightHost := include "spice-instance.flightSqlIngressHost" . }}
+{{- $port := .Values.ingress.flightSQL.port | default 50051 }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "spice-instance.fullname" . }}-flight
+  labels:
+    app.kubernetes.io/name: {{ include "spice-instance.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    owner-layer-slug: {{ $slug | quote }}
+    spice.dataviz/component: flight-sql
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    {{- with .Values.ingress.flightSQL.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if and .Values.ingress.tls.enabled .Values.ingress.tls.secretName }}
+  tls:
+    - hosts:
+        - {{ $flightHost | quote }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ $flightHost | quote }}
+      http:
+        paths:
+          # Arrow Flight SQL (gRPC). Own hostname so it does not share path / with the HTTP Ingress (nginx would 404 gRPC).
+          # Clients: grpc://<flight-host>[:80] or grpcs://<flight-host> (TLS).
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "spice-instance.spiceaiServiceName" . }}
+                port:
+                  number: {{ $port }}
+{{- end }}

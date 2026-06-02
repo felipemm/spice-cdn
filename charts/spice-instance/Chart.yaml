@@ -2,7 +2,7 @@ apiVersion: v2
 name: spice-instance
 description: Wrapper chart for Spice.ai OSS (spiceai) with per-instance Ingress
 type: application
-version: 0.1.0
+version: 0.1.1
 appVersion: "1.11.6"
 dependencies:
   - name: spiceai

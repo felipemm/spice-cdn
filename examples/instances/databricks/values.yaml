@@ -4,6 +4,9 @@ ingress:
   enabled: true
   className: nginx
   host: spice-databricks.127.0.0.1.nip.io
+  flightSQL:
+    enabled: true
+    port: 50051
 
 externalSecret:
   enabled: true
@@ -20,7 +23,7 @@ spiceai:
     kind: Spicepod
     name: databricksa
     models:
-      - from: openai:ifood_default
+      - from: openai:deepseek-v4-pro-official
         name: ifood
         params:
           openai_api_key: ${ secrets:OPENAI_API_KEY }

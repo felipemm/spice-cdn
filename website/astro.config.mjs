@@ -17,6 +17,7 @@ export default defineConfig({
 				{
 					label: 'Guides',
 					items: [
+						{ label: 'What is Spice CDN?', slug: 'guides/what-is-spice-cdn' },
 						{ label: 'User guide', slug: 'guides/user-guide' },
 						{ label: 'Install', slug: 'guides/install' },
 						{ label: 'Product vs GitOps', slug: 'guides/architecture' },

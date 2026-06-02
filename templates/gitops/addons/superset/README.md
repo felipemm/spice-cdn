@@ -58,7 +58,7 @@ When the control plane **`POST /api/instances`** creates a new instance, it can 
 
 The SQL Lab database display name is **`Spice (<instance>)`**, with URI **`datafusion+flightsql://<instance>-spiceai.<namespace>.svc.cluster.local:50051?insecure=true`**.
 
-Deleting an instance via **`DELETE /api/instances/:name`** removes that Superset database when the same env/secret are configured.
+Deleting an instance via **`DELETE /api/instances/:name`** removes GitOps files, Vault KV at **`spice/instances/<name>`** (when `VAULT_TOKEN` is set), and that Superset database when the same env/secret are configured.
 
 ## Optional Argo CD Application
 

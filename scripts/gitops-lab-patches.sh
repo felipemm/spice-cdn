@@ -78,12 +78,12 @@ patch_materialized_control_plane_vault() {
   [[ -f "${vf}" ]] || return 0
   if spice_patch_feature_enabled superset; then
     perl -0777 -pe '
-      s/^externalSecret:\n  enabled: false/externalSecret:\n  enabled: true/s;
-      s/^  syncSuperset: false/  syncSuperset: true/s;
+      s/^externalSecret:\n  enabled: false/externalSecret:\n  enabled: true/ms;
+      s/^  syncSuperset: false/  syncSuperset: true/ms;
     ' "${vf}" >"${vf}.tmp" && mv "${vf}.tmp" "${vf}"
   else
     perl -0777 -pe '
-      s/^externalSecret:\n  enabled: false/externalSecret:\n  enabled: true/s;
+      s/^externalSecret:\n  enabled: false/externalSecret:\n  enabled: true/ms;
     ' "${vf}" >"${vf}.tmp" && mv "${vf}.tmp" "${vf}"
   fi
 }

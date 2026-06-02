@@ -414,6 +414,146 @@ code {
   line-height: 1;
 }
 
+/* Concept cards */
+.concept-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  margin-bottom: 2rem;
+}
+
+.concept-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.35rem 1.4rem;
+}
+
+.concept-card-accent {
+  border-color: rgba(94, 234, 212, 0.35);
+  box-shadow: 0 0 40px var(--accent-glow);
+}
+
+.concept-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.concept-card h3 {
+  margin: 0 0 0.65rem;
+  font-size: 1.2rem;
+  letter-spacing: -0.02em;
+}
+
+.concept-card > p {
+  margin: 0 0 0.85rem;
+  color: var(--muted);
+  font-size: 0.94rem;
+  line-height: 1.6;
+}
+
+.concept-analogy {
+  margin: 0 !important;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.88rem !important;
+}
+
+.concept-analogy strong {
+  color: var(--fg);
+}
+
+.compare-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 2rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 0.85rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.compare-table thead th {
+  color: var(--fg);
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.compare-table tbody th {
+  color: var(--muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.compare-table td {
+  color: var(--muted);
+}
+
+.compare-table tr:last-child th,
+.compare-table tr:last-child td {
+  border-bottom: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.outcome-box {
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 1.5rem 1.75rem;
+}
+
+.outcome-box h3 {
+  margin: 0 0 1rem;
+  font-size: 1.15rem;
+}
+
+.outcome-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--muted);
+}
+
+.outcome-list li {
+  margin-bottom: 0.65rem;
+  line-height: 1.55;
+}
+
+.outcome-list strong {
+  color: var(--fg);
+}
+
+.outcome-footer {
+  margin: 1.25rem 0 0;
+  font-size: 0.95rem;
+}
+
 /* Feature grid */
 .feature-grid {
   display: grid;

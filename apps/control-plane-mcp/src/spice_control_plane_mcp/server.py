@@ -115,7 +115,7 @@ def get_spice_instance(name: str) -> str:
 
 @mcp.tool()
 def delete_spice_instance(name: str) -> str:
-    """DELETE /api/instances/<name> — remove instance from Git (destructive)."""
+    """DELETE /api/instances/<name> — remove GitOps files, Vault secrets, and Superset DB (destructive)."""
     seg = quote(name.strip(), safe="")
     return _json_tool(_fetch("DELETE", f"/api/instances/{seg}"))
 
